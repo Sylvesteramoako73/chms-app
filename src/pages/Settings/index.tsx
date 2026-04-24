@@ -14,7 +14,7 @@ import { Separator } from '@/components/ui/separator';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { Save, Upload, Church, Shield, Moon, Cog, Building2, ClipboardList, Pencil, Trash2, MessageCircle, Users2, Loader2 } from 'lucide-react';
+import { Save, Upload, Church, Shield, Moon, Cog, Building2, ClipboardList, Pencil, Trash2, MessageCircle, Users2, Loader2, UserPlus, Eye, EyeOff } from 'lucide-react';
 import { format } from 'date-fns';
 import { WhatsAppConnect } from '@/components/WhatsAppConnect';
 
@@ -39,10 +39,17 @@ const ROLE_BADGE: Record<UserRole, string> = {
 
 export default function Settings() {
   const { theme, toggleTheme, departments, campuses, auditLogs, addCampus, updateCampus, deleteCampus } = useData();
-  const { profile, allProfiles, updateUserRole, refreshProfiles } = useAuth();
+  const { profile, allProfiles, updateUserRole, createUser, deleteUser, refreshProfiles } = useAuth();
   const { actions } = useRole();
   const { toast } = useToast();
   const [updatingRole, setUpdatingRole] = useState<string | null>(null);
+  const [addUserOpen, setAddUserOpen] = useState(false);
+  const [addUserForm, setAddUserForm] = useState({ name: '', email: '', password: '', role: 'Data Entry' as UserRole });
+  const [addUserLoading, setAddUserLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [confirmDeleteName, setConfirmDeleteName] = useState('');
 
   const [campusDialogOpen, setCampusDialogOpen] = useState(false);
   const [editingCampus, setEditingCampus] = useState<Campus | null>(null);
@@ -104,6 +111,42 @@ export default function Settings() {
     setUpdatingRole(null);
     if (error) toast({ title: 'Error', description: error, variant: 'destructive' });
     else toast({ title: 'Role updated', description: 'User role has been changed.' });
+  };
+
+  const handleAddUser = async () => {
+    if (!addUserForm.name.trim() || !addUserForm.email.trim() || !addUserForm.password) {
+      toast({ title: 'All fields required', variant: 'destructive' });
+      return;
+    }
+    if (addUserForm.password.length < 6) {
+      toast({ title: 'Password too short', description: 'Minimum 6 characters.', variant: 'destructive' });
+      return;
+    }
+    setAddUserLoading(true);
+    const { error } = await createUser(addUserForm.name, addUserForm.email, addUserForm.password, addUserForm.role);
+    setAddUserLoading(false);
+    if (error) {
+      toast({ title: 'Failed to create user', description: error, variant: 'destructive' });
+    } else {
+      toast({ title: 'User created', description: `${addUserForm.name} has been added with ${addUserForm.role} role.` });
+      setAddUserOpen(false);
+      setAddUserForm({ name: '', email: '', password: '', role: 'Data Entry' });
+    }
+  };
+
+  const promptDeleteUser = (userId: string, name: string) => {
+    setDeletingUserId(userId);
+    setConfirmDeleteName(name);
+    setConfirmDeleteOpen(true);
+  };
+
+  const handleDeleteUser = async () => {
+    if (!deletingUserId) return;
+    const { error } = await deleteUser(deletingUserId);
+    setConfirmDeleteOpen(false);
+    setDeletingUserId(null);
+    if (error) toast({ title: 'Error', description: error, variant: 'destructive' });
+    else toast({ title: 'User removed', description: `${confirmDeleteName} has been removed from the app.` });
   };
 
   const filteredAuditLogs = auditFilter === 'all' ? auditLogs : auditLogs.filter(l => l.entity === auditFilter);
@@ -370,19 +413,24 @@ export default function Settings() {
           <TabsContent value="users" className="mt-0">
             <Card className="glass border-none shadow-sm">
               <CardHeader>
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-3 flex-wrap">
                   <div>
                     <CardTitle className="flex items-center gap-2"><Users2 className="w-5 h-5 text-navy-500" /> User Accounts</CardTitle>
                     <CardDescription>{allProfiles.length} account{allProfiles.length !== 1 ? 's' : ''} registered</CardDescription>
                   </div>
-                  <Button variant="outline" size="sm" className="gap-2" onClick={refreshProfiles}>
-                    <Loader2 className="w-3.5 h-3.5" /> Refresh
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" className="gap-2" onClick={refreshProfiles}>
+                      <Loader2 className="w-3.5 h-3.5" /> Refresh
+                    </Button>
+                    <Button size="sm" className="gap-2 bg-white hover:bg-gray-50 text-navy-900 font-medium" onClick={() => setAddUserOpen(true)}>
+                      <UserPlus className="w-3.5 h-3.5" /> Add User
+                    </Button>
+                  </div>
                 </div>
               </CardHeader>
               <CardContent className="space-y-3">
                 {allProfiles.length === 0 && (
-                  <p className="text-sm text-muted-foreground py-4 text-center">No users found. Have staff sign up via the login page.</p>
+                  <p className="text-sm text-muted-foreground py-4 text-center">No users found. Add your first user above.</p>
                 )}
                 {allProfiles.map(u => (
                   <div key={u.id} className="flex items-center justify-between gap-4 p-3 rounded-lg border border-border/40 bg-muted/10">
@@ -419,6 +467,14 @@ export default function Settings() {
                           </SelectContent>
                         </Select>
                       )}
+                      <Button
+                        variant="ghost" size="icon"
+                        className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                        disabled={u.id === profile?.id}
+                        onClick={() => promptDeleteUser(u.id, u.name)}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
                     </div>
                   </div>
                 ))}
@@ -449,6 +505,76 @@ export default function Settings() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Add User Dialog */}
+      <Dialog open={addUserOpen} onOpenChange={setAddUserOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-display text-2xl">Add User</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <Label>Full Name *</Label>
+              <Input placeholder="e.g. John Mensah" value={addUserForm.name} onChange={e => setAddUserForm(f => ({ ...f, name: e.target.value }))} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Email Address *</Label>
+              <Input type="email" placeholder="john@church.org" value={addUserForm.email} onChange={e => setAddUserForm(f => ({ ...f, email: e.target.value }))} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Temporary Password *</Label>
+              <div className="relative">
+                <Input
+                  type={showPassword ? 'text' : 'password'}
+                  placeholder="Min. 6 characters"
+                  value={addUserForm.password}
+                  onChange={e => setAddUserForm(f => ({ ...f, password: e.target.value }))}
+                  className="pr-10"
+                />
+                <button type="button" onClick={() => setShowPassword(v => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+              <p className="text-xs text-muted-foreground">Share this password with the user so they can sign in.</p>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Role *</Label>
+              <Select value={addUserForm.role} onValueChange={v => setAddUserForm(f => ({ ...f, role: v as UserRole }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {ROLE_OPTIONS.map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAddUserOpen(false)}>Cancel</Button>
+            <Button onClick={handleAddUser} disabled={addUserLoading} className="gap-2 bg-white hover:bg-gray-50 text-navy-900 font-medium">
+              {addUserLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <UserPlus className="w-4 h-4" />}
+              {addUserLoading ? 'Creating…' : 'Create User'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete User Confirmation */}
+      <Dialog open={confirmDeleteOpen} onOpenChange={setConfirmDeleteOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="font-display text-xl">Remove User?</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground py-2">
+            This will remove <strong>{confirmDeleteName}</strong> from the app. They will lose their role and no longer appear here.
+            Their Supabase Auth account remains — contact your Supabase dashboard to fully revoke login access.
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmDeleteOpen(false)}>Cancel</Button>
+            <Button variant="destructive" onClick={handleDeleteUser} className="gap-2">
+              <Trash2 className="w-4 h-4" /> Remove User
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Campus Dialog */}
       <Dialog open={campusDialogOpen} onOpenChange={setCampusDialogOpen}>

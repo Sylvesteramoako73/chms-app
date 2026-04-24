@@ -19,6 +19,8 @@ interface AuthContextValue {
   signOut: () => Promise<void>;
   allProfiles: UserProfile[];
   updateUserRole: (userId: string, role: UserRole) => Promise<{ error: string | null }>;
+  createUser: (name: string, email: string, password: string, role: UserRole) => Promise<{ error: string | null }>;
+  deleteUser: (userId: string) => Promise<{ error: string | null }>;
   refreshProfiles: () => Promise<void>;
 }
 
@@ -193,6 +195,55 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error: null };
   };
 
+  // ── Create User (admin) ───────────────────────────────────────────────────
+  const createUser = async (name: string, email: string, password: string, role: UserRole): Promise<{ error: string | null }> => {
+    // Capture the admin's current session so we can restore it if Supabase
+    // auto-signs-in the new user (happens when email confirmation is disabled).
+    const { data: { session: adminSession } } = await supabase.auth.getSession();
+
+    const { data, error } = await supabase.auth.signUp({
+      email: email.trim().toLowerCase(),
+      password,
+      options: { data: { name: name.trim(), role } },
+    });
+    if (error) return { error: error.message };
+    if (!data.user) return { error: 'Failed to create user — please try again.' };
+
+    // Mirror to profiles table
+    try {
+      await supabase.from('profiles').upsert(
+        { id: data.user.id, name: name.trim(), email: email.trim().toLowerCase(), role },
+        { onConflict: 'id' },
+      );
+    } catch (_) { /* profiles table may not exist */ }
+
+    // Restore admin session if it was displaced by auto-sign-in
+    if (adminSession && data.session) {
+      await supabase.auth.setSession({
+        access_token: adminSession.access_token,
+        refresh_token: adminSession.refresh_token,
+      });
+    }
+
+    await fetchAllProfiles();
+    return { error: null };
+  };
+
+  // ── Delete User (admin) ───────────────────────────────────────────────────
+  const deleteUser = async (userId: string): Promise<{ error: string | null }> => {
+    if (userId === user?.id) return { error: 'You cannot delete your own account.' };
+
+    try {
+      const { error } = await supabase.from('profiles').delete().eq('id', userId);
+      if (error) return { error: error.message };
+    } catch (_) {
+      return { error: 'Could not remove user from profiles table.' };
+    }
+
+    await fetchAllProfiles();
+    return { error: null };
+  };
+
   // ── Refresh ───────────────────────────────────────────────────────────────
   const refreshProfiles = async () => {
     await fetchAllProfiles();
@@ -203,7 +254,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, profile, loading, signIn, signUp, signOut, allProfiles, updateUserRole, refreshProfiles }}>
+    <AuthContext.Provider value={{ user, profile, loading, signIn, signUp, signOut, allProfiles, updateUserRole, createUser, deleteUser, refreshProfiles }}>
       {children}
     </AuthContext.Provider>
   );
