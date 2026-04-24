@@ -14,7 +14,7 @@ import { Separator } from '@/components/ui/separator';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { Save, Upload, Church, Shield, Moon, Cog, Building2, ClipboardList, Pencil, Trash2, MessageCircle, Users2, Loader2, UserPlus, Eye, EyeOff } from 'lucide-react';
+import { Save, Upload, Church, Shield, Moon, Cog, Building2, ClipboardList, Pencil, Trash2, MessageCircle, MessageSquare, Users2, Loader2, UserPlus, Eye, EyeOff } from 'lucide-react';
 import { format } from 'date-fns';
 import { WhatsAppConnect } from '@/components/WhatsAppConnect';
 
@@ -55,6 +55,16 @@ export default function Settings() {
   const [editingCampus, setEditingCampus] = useState<Campus | null>(null);
   const [campusForm, setCampusForm] = useState(EMPTY_CAMPUS);
   const [auditFilter, setAuditFilter] = useState('all');
+
+  const [smsSettings, setSmsSettings] = useState<{ apiKey: string; senderId: string }>(() => {
+    try { return { apiKey: '', senderId: 'ChurchCare', ...JSON.parse(localStorage.getItem('chms_sms_settings') ?? '{}') }; }
+    catch { return { apiKey: '', senderId: 'ChurchCare' }; }
+  });
+  const updateSmsSettings = (key: 'apiKey' | 'senderId', val: string) => {
+    const next = { ...smsSettings, [key]: val };
+    setSmsSettings(next);
+    localStorage.setItem('chms_sms_settings', JSON.stringify(next));
+  };
 
   const [birthdayWA, setBirthdayWA] = useState<{ birthdayEnabled: boolean; anniversaryEnabled: boolean }>(() => {
     try { return { birthdayEnabled: false, anniversaryEnabled: false, ...JSON.parse(localStorage.getItem('chms_birthday_wa') ?? '{}') }; }
@@ -293,6 +303,36 @@ export default function Settings() {
                   <p className="text-xs text-muted-foreground">Celebrate members' years of membership each year</p>
                 </div>
                 <Switch checked={birthdayWA.anniversaryEnabled} onCheckedChange={v => updateBirthdayWA('anniversaryEnabled', v)} />
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* SMS Settings */}
+          <Card className="glass border-none shadow-sm">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2"><MessageSquare className="w-4 h-4 text-blue-500" /> SMS Settings (mNotify)</CardTitle>
+              <CardDescription>Enter your mNotify API key to send bulk SMS directly from the app — no separate server needed.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-1.5">
+                <Label>mNotify API Key</Label>
+                <Input
+                  type="password"
+                  placeholder="Paste your mNotify API key…"
+                  value={smsSettings.apiKey}
+                  onChange={e => updateSmsSettings('apiKey', e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">Get your API key from <strong>mnotify.com</strong> → Account → API.</p>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Sender ID</Label>
+                <Input
+                  placeholder="e.g. ChurchCare (max 11 chars)"
+                  maxLength={11}
+                  value={smsSettings.senderId}
+                  onChange={e => updateSmsSettings('senderId', e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">The name recipients see as the sender. Must be registered with mNotify.</p>
               </div>
             </CardContent>
           </Card>
