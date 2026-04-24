@@ -25,7 +25,7 @@ export function Layout() {
   const { theme, toggleTheme, loading } = useData();
   const location = useLocation();
 
-  const { canAccess, currentUser } = useRole();
+  const { canAccess, role } = useRole();
 
   // Guard: redirect restricted routes to dashboard
   const basePath = '/' + location.pathname.split('/')[1];
@@ -38,7 +38,7 @@ export function Layout() {
           </div>
           <h2 className="text-xl font-semibold">Access Restricted</h2>
           <p className="text-sm text-muted-foreground">
-            Your role <strong>{currentUser.role}</strong> does not have permission to view this page.
+            Your role <strong>{role}</strong> does not have permission to view this page.
           </p>
           <Navigate to="/" replace />
         </div>

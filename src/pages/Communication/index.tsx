@@ -11,6 +11,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { Send, Clock, Mail, MessageSquare, Megaphone, CheckCircle, Loader2, AlertCircle, Wifi } from 'lucide-react';
 import { format, subDays } from 'date-fns';
+import { API_BASE } from '@/lib/api';
 
 // WhatsApp icon as inline SVG to avoid extra dependencies
 function WhatsAppIcon({ className }: { className?: string }) {
@@ -90,7 +91,7 @@ export default function Communication() {
   const [waStatus, setWaStatus] = useState<'unknown' | 'connected' | 'disconnected'>('unknown');
 
   useEffect(() => {
-    fetch('/api/whatsapp/status')
+    fetch(`${API_BASE}/api/whatsapp/status`)
       .then(r => r.json())
       .then(d => setWaStatus(d.status === 'connected' ? 'connected' : 'disconnected'))
       .catch(() => setWaStatus('disconnected'));
@@ -103,7 +104,7 @@ export default function Communication() {
     }
     setWaSending(true);
     try {
-      const res = await fetch('/api/sms/send-bulk', {
+      const res = await fetch(`${API_BASE}/api/sms/send-bulk`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ numbers: phones, message: text }),
@@ -128,7 +129,7 @@ export default function Communication() {
     }
     setWaSending(true);
     try {
-      const res = await fetch('/api/whatsapp/send-bulk', {
+      const res = await fetch(`${API_BASE}/api/whatsapp/send-bulk`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ numbers: phones, message: text }),

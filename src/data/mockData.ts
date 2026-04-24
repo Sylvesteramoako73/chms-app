@@ -34,7 +34,7 @@ export const mockMembers: Member[] = Array.from({ length: 25 }).map((_, i) => ({
   phone: `+1-555-${Math.floor(1000000 + Math.random() * 9000000)}`,
   email: `${firstNames.male[i % firstNames.male.length].toLowerCase()}${lastNames[i % lastNames.length].toLowerCase()}@example.com`,
   address: `${Math.floor(Math.random() * 1000)} ${lastNames[i % lastNames.length]} Street`,
-  dateOfBirth: subDays(new Date(), Math.floor(Math.random() * 365 * 30)),
+  dateOfBirth: format(subDays(new Date(), Math.floor(Math.random() * 365 * 30)), 'yyyy-MM-dd'),
   gender: i % 2 === 0 ? 'Male' : 'Female',
   maritalStatus: i % 2 === 0 ? 'Married' : 'Single',
   occupation: 'Software Engineer',
@@ -42,8 +42,8 @@ export const mockMembers: Member[] = Array.from({ length: 25 }).map((_, i) => ({
   smallGroupId: mockSmallGroups[i % mockSmallGroups.length].id,
   campusId: mockCampuses[i % mockCampuses.length].id,
   status: statuses[i % statuses.length],
-  joinDate: subMonths(new Date(), Math.floor(Math.random() * 12)),
-  baptismDate: i % 3 === 0 ? subMonths(new Date(), Math.floor(Math.random() * 12)) : undefined,
+  joinDate: format(subMonths(new Date(), Math.floor(Math.random() * 12)), 'yyyy-MM-dd'),
+  baptismDate: i % 3 === 0 ? format(subMonths(new Date(), Math.floor(Math.random() * 12)), 'yyyy-MM-dd') : undefined,
   notes: 'Lorem ipsum dolor sit amet, consectetur adipiscing elit.',
 }));
 

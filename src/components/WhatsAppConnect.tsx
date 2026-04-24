@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Loader2, CheckCircle2, Unplug, RefreshCw, AlertTriangle } from 'lucide-react';
+import { API_BASE } from '@/lib/api';
 
 type WaStatus = 'disconnected' | 'connecting' | 'qr' | 'connected';
 
@@ -32,7 +33,7 @@ export function WhatsAppConnect() {
 
   const connectSSE = () => {
     if (esRef.current) esRef.current.close();
-    const es = new EventSource('/api/whatsapp/events');
+    const es = new EventSource(`${API_BASE}/api/whatsapp/events`);
     esRef.current = es;
 
     es.onmessage = (e) => {
@@ -61,11 +62,11 @@ export function WhatsAppConnect() {
 
   const handleConnect = async () => {
     setServerOffline(false);
-    await fetch('/api/whatsapp/connect', { method: 'POST' }).catch(() => setServerOffline(true));
+    await fetch(`${API_BASE}/api/whatsapp/connect`, { method: 'POST' }).catch(() => setServerOffline(true));
   };
 
   const handleDisconnect = async () => {
-    await fetch('/api/whatsapp/disconnect', { method: 'POST' }).catch(() => setServerOffline(true));
+    await fetch(`${API_BASE}/api/whatsapp/disconnect`, { method: 'POST' }).catch(() => setServerOffline(true));
   };
 
   if (serverOffline) {
