@@ -7,6 +7,7 @@ export type PaymentMethod = 'Cash' | 'Mobile Money' | 'Bank Transfer';
 export type ServiceType = 'Sunday First Service' | 'Sunday Second Service' | 'Midweek' | 'Prayer Meeting' | 'Special Program';
 export type PrayerCategory = 'Health' | 'Family' | 'Finance' | 'Spiritual' | 'Work' | 'Other';
 export type VisitType = 'Home Visit' | 'Hospital Visit' | 'Phone Call' | 'Counseling' | 'Follow-up';
+export type VisitorFollowUpStatus = 'Pending' | 'Contacted' | 'Revisited' | 'Converted';
 export type AuditAction = 'CREATE' | 'UPDATE' | 'DELETE';
 export type AuditEntity =
   | 'Member' | 'Attendance' | 'Giving' | 'Event' | 'Department' | 'SmallGroup'
@@ -147,6 +148,19 @@ export interface PledgePayment {
   pledgeId: string;
   amount: number;
   date: string;
+  notes?: string;
+}
+
+export interface VisitorRecord {
+  id: string;
+  name: string;
+  phone?: string;
+  email?: string;
+  visitDate: string;
+  serviceAttended?: string;
+  howHeard?: string;
+  followUpStatus: VisitorFollowUpStatus;
+  followUpDate?: string;
   notes?: string;
 }
 

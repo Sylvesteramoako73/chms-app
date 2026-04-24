@@ -1,4 +1,5 @@
 import { Routes, Route } from 'react-router-dom';
+import { useBirthdayWA } from './hooks/useBirthdayWA';
 import { Layout } from './components/layout/Layout';
 import { useAuth } from './context/AuthContext';
 import AuthPage from './pages/Auth';
@@ -16,6 +17,7 @@ import PrayerRequests from './pages/PrayerRequests';
 import PastoralCare from './pages/PastoralCare';
 import Volunteers from './pages/Volunteers';
 import Pledges from './pages/Pledges';
+import Visitors from './pages/Visitors';
 
 function LoadingScreen() {
   return (
@@ -30,12 +32,8 @@ function LoadingScreen() {
   );
 }
 
-function App() {
-  const { user, loading } = useAuth();
-
-  if (loading) return <LoadingScreen />;
-  if (!user) return <AuthPage />;
-
+function AppRoutes() {
+  useBirthdayWA();
   return (
     <Routes>
       <Route path="/" element={<Layout />}>
@@ -53,9 +51,19 @@ function App() {
         <Route path="pastoral" element={<PastoralCare />} />
         <Route path="volunteers" element={<Volunteers />} />
         <Route path="pledges" element={<Pledges />} />
+        <Route path="visitors" element={<Visitors />} />
       </Route>
     </Routes>
   );
+}
+
+function App() {
+  const { user, loading } = useAuth();
+
+  if (loading) return <LoadingScreen />;
+  if (!user) return <AuthPage />;
+
+  return <AppRoutes />;
 }
 
 export default App;

@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
-import type { Member, Department, SmallGroup, AttendanceRecord, GivingRecord, EventRecord, Campus, PrayerRequest, PastoralVisit, VolunteerRole, Campaign, Pledge, PledgePayment, AuditLog, AuditEntity, AuditAction } from '../types';
+import type { Member, Department, SmallGroup, AttendanceRecord, GivingRecord, EventRecord, Campus, PrayerRequest, PastoralVisit, VolunteerRole, Campaign, Pledge, PledgePayment, AuditLog, AuditEntity, AuditAction, VisitorRecord } from '../types';
 import { supabase } from '../lib/supabase';
 
 // ---------------------------------------------------------------------------
@@ -96,6 +96,7 @@ interface DataContextType {
   pledges: Pledge[];
   pledgePayments: PledgePayment[];
   auditLogs: AuditLog[];
+  visitors: VisitorRecord[];
   theme: 'dark' | 'light';
   toggleTheme: () => void;
 
@@ -143,6 +144,10 @@ interface DataContextType {
   updatePledge: (pledge: Pledge) => void;
   deletePledge: (id: string) => void;
   recordPledgePayment: (payment: PledgePayment) => void;
+
+  addVisitor: (v: VisitorRecord) => void;
+  updateVisitor: (v: VisitorRecord) => void;
+  deleteVisitor: (id: string) => void;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
@@ -166,7 +171,15 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [pledges, setPledges] = useState<Pledge[]>([]);
   const [pledgePayments, setPledgePayments] = useState<PledgePayment[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
+  const [visitors, setVisitors] = useState<VisitorRecord[]>(() => {
+    try { return JSON.parse(localStorage.getItem('chms_visitors') ?? '[]'); }
+    catch { return []; }
+  });
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
+
+  useEffect(() => {
+    localStorage.setItem('chms_visitors', JSON.stringify(visitors));
+  }, [visitors]);
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', theme === 'dark');
@@ -447,11 +460,19 @@ export function DataProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  // ---------------------------------------------------------------------------
+  // Visitors (localStorage)
+  // ---------------------------------------------------------------------------
+  const addVisitor = (v: VisitorRecord) => setVisitors(prev => [v, ...prev]);
+  const updateVisitor = (v: VisitorRecord) => setVisitors(prev => prev.map(x => x.id === v.id ? v : x));
+  const deleteVisitor = (id: string) => setVisitors(prev => prev.filter(x => x.id !== id));
+
   return (
     <DataContext.Provider value={{
       loading,
       members, departments, smallGroups, attendance, giving, events, campuses,
       prayerRequests, pastoralVisits, volunteerRoles, campaigns, pledges, pledgePayments, auditLogs,
+      visitors,
       theme, toggleTheme,
       addMember, updateMember, deleteMember, importMembers,
       addAttendance,
@@ -465,6 +486,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       addVolunteerRole, updateVolunteerRole, deleteVolunteerRole,
       addCampaign, updateCampaign, deleteCampaign,
       addPledge, updatePledge, deletePledge, recordPledgePayment,
+      addVisitor, updateVisitor, deleteVisitor,
     }}>
       {children}
     </DataContext.Provider>

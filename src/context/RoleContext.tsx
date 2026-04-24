@@ -6,11 +6,11 @@ const ROLE_ACCESS: Record<UserRole, string[]> = {
   Administrator: [
     '/', '/members', '/attendance', '/giving', '/events', '/departments',
     '/communication', '/reports', '/settings', '/prayer', '/pastoral',
-    '/volunteers', '/pledges',
+    '/volunteers', '/pledges', '/visitors',
   ],
   Pastor: [
     '/', '/members', '/attendance', '/giving', '/communication',
-    '/reports', '/prayer', '/pastoral', '/volunteers', '/pledges', '/events',
+    '/reports', '/prayer', '/pastoral', '/volunteers', '/pledges', '/events', '/visitors',
   ],
   'Department Head': [
     '/', '/members', '/attendance', '/events', '/prayer', '/volunteers',

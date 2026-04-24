@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   LayoutDashboard, Users, CalendarCheck, Coins,
   CalendarDays, Settings, MessageSquare, PieChart, Building2, X,
-  Heart, HeartHandshake, ClipboardList, Target, LogOut, Church,
+  Heart, HeartHandshake, ClipboardList, Target, LogOut, Church, UserPlus,
 } from 'lucide-react';
 import { cn } from '@/utils';
 import { useRole, type UserRole } from '@/context/RoleContext';
@@ -20,6 +20,7 @@ const navItems = [
   { name: 'Pastoral Care', path: '/pastoral', icon: HeartHandshake },
   { name: 'Volunteers', path: '/volunteers', icon: ClipboardList },
   { name: 'Pledges', path: '/pledges', icon: Target },
+  { name: 'Visitor Follow-up', path: '/visitors', icon: UserPlus },
   { name: 'Communication', path: '/communication', icon: MessageSquare },
   { name: 'Reports', path: '/reports', icon: PieChart },
   { name: 'Settings', path: '/settings', icon: Settings },

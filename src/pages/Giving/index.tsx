@@ -11,8 +11,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
-import { Coins, Plus, TrendingUp, Search, Trash2 } from 'lucide-react';
+import { Coins, Plus, TrendingUp, Search, Trash2, FileText } from 'lucide-react';
 import { format, parseISO, isSameMonth, subMonths, startOfMonth, endOfMonth, eachMonthOfInterval } from 'date-fns';
+import jsPDF from 'jspdf';
 
 const TYPE_COLORS: Record<string, string> = {
   Tithe: 'bg-gold-500/10 text-gold-700 dark:text-gold-400 border-gold-200 dark:border-gold-800/40',
@@ -92,6 +93,78 @@ export default function Giving() {
   const handleDelete = (record: GivingRecord) => {
     deleteGiving(record.id);
     toast({ title: 'Record deleted', description: 'The giving record has been removed.' });
+  };
+
+  const generateReceipt = (record: GivingRecord) => {
+    const member = members.find(m => m.id === record.memberId);
+    const memberName = member ? `${member.firstName} ${member.lastName}` : 'Anonymous';
+    const receiptNo = `RCP-${record.id.replace(/\D/g, '').slice(-6).padStart(6, '0')}`;
+
+    const doc = new jsPDF();
+    const W = doc.internal.pageSize.getWidth();
+
+    // Header band
+    doc.setFillColor(11, 17, 32);
+    doc.rect(0, 0, W, 44, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(22);
+    doc.setTextColor(201, 168, 76);
+    doc.text('ChurchCare', W / 2, 18, { align: 'center' });
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(180, 180, 180);
+    doc.text('Official Tithe & Offering Receipt', W / 2, 28, { align: 'center' });
+    doc.text(receiptNo, W / 2, 37, { align: 'center' });
+
+    // Section title
+    doc.setTextColor(11, 17, 32);
+    doc.setFontSize(13);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Receipt Details', 14, 58);
+    doc.setDrawColor(201, 168, 76);
+    doc.setLineWidth(0.6);
+    doc.line(14, 62, W - 14, 62);
+
+    // Detail rows
+    const rows: [string, string][] = [
+      ['Member', memberName],
+      ['Date', format(parseISO(record.date), 'MMMM d, yyyy')],
+      ['Giving Type', record.type],
+      ['Payment Method', record.paymentMethod],
+      ['Amount', `GHS ${record.amount.toLocaleString()}`],
+    ];
+    if (record.notes) rows.push(['Notes', record.notes]);
+
+    let y = 74;
+    rows.forEach(([label, value]) => {
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(11);
+      doc.setTextColor(120, 120, 120);
+      doc.text(label + ':', 14, y);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(11, 17, 32);
+      doc.text(value, 75, y);
+      y += 13;
+    });
+
+    // Amount highlight box
+    doc.setFillColor(248, 249, 250);
+    doc.setDrawColor(201, 168, 76);
+    doc.setLineWidth(0.5);
+    doc.roundedRect(14, y + 6, W - 28, 24, 3, 3, 'FD');
+    doc.setFontSize(15);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(11, 17, 32);
+    doc.text(`Total Paid: GHS ${record.amount.toLocaleString()}`, W / 2, y + 22, { align: 'center' });
+
+    // Footer
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'italic');
+    doc.setTextColor(160, 160, 160);
+    doc.text('Thank you for your faithful giving. May God bless you abundantly!', W / 2, y + 46, { align: 'center' });
+    doc.text(`Generated on ${format(new Date(), 'MMM d, yyyy HH:mm')}`, W / 2, y + 54, { align: 'center' });
+
+    doc.save(`${receiptNo}.pdf`);
   };
 
   const memberOptions = members.filter(m => m.status === 'Active' || m.status === 'New Convert');
@@ -225,9 +298,14 @@ export default function Giving() {
                       <TableCell className="hidden sm:table-cell text-sm text-muted-foreground">{record.paymentMethod}</TableCell>
                       <TableCell className="text-right font-bold text-gold-600 dark:text-gold-400">₵{record.amount.toLocaleString()}</TableCell>
                       <TableCell className="text-right pr-6">
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => handleDelete(record)}>
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </Button>
+                        <div className="flex items-center justify-end gap-1">
+                          <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground" title="Download receipt" onClick={() => generateReceipt(record)}>
+                            <FileText className="w-3.5 h-3.5" />
+                          </Button>
+                          <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => handleDelete(record)}>
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   );

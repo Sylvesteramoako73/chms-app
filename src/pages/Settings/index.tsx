@@ -49,6 +49,17 @@ export default function Settings() {
   const [campusForm, setCampusForm] = useState(EMPTY_CAMPUS);
   const [auditFilter, setAuditFilter] = useState('all');
 
+  const [birthdayWA, setBirthdayWA] = useState<{ birthdayEnabled: boolean; anniversaryEnabled: boolean }>(() => {
+    try { return { birthdayEnabled: false, anniversaryEnabled: false, ...JSON.parse(localStorage.getItem('chms_birthday_wa') ?? '{}') }; }
+    catch { return { birthdayEnabled: false, anniversaryEnabled: false }; }
+  });
+
+  const updateBirthdayWA = (key: 'birthdayEnabled' | 'anniversaryEnabled', val: boolean) => {
+    const next = { ...birthdayWA, [key]: val };
+    setBirthdayWA(next);
+    localStorage.setItem('chms_birthday_wa', JSON.stringify(next));
+  };
+
   const [churchName, setChurchName] = useState('Grace Cathedral');
   const [denomination, setDenomination] = useState('Non-Denominational');
   const [email, setEmail] = useState('info@grace.org');
@@ -216,6 +227,30 @@ export default function Settings() {
               <Button variant="outline" size="sm" className="mt-2 gap-2 w-full">
                 + Add Service Type
               </Button>
+            </CardContent>
+          </Card>
+
+          {/* WhatsApp Notifications */}
+          <Card className="glass border-none shadow-sm">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2"><MessageCircle className="w-4 h-4 text-green-500" /> WhatsApp Notifications</CardTitle>
+              <CardDescription>Automatically send greetings via WhatsApp. Requires WhatsApp to be connected.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="flex items-center justify-between p-4 rounded-lg border border-border/40 bg-muted/20">
+                <div>
+                  <p className="font-medium text-sm">Birthday Greetings</p>
+                  <p className="text-xs text-muted-foreground">Send a birthday message to members on their birthday</p>
+                </div>
+                <Switch checked={birthdayWA.birthdayEnabled} onCheckedChange={v => updateBirthdayWA('birthdayEnabled', v)} />
+              </div>
+              <div className="flex items-center justify-between p-4 rounded-lg border border-border/40 bg-muted/20">
+                <div>
+                  <p className="font-medium text-sm">Join Anniversaries</p>
+                  <p className="text-xs text-muted-foreground">Celebrate members' years of membership each year</p>
+                </div>
+                <Switch checked={birthdayWA.anniversaryEnabled} onCheckedChange={v => updateBirthdayWA('anniversaryEnabled', v)} />
+              </div>
             </CardContent>
           </Card>
 
