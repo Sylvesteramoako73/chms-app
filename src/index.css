@@ -1,0 +1,88 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 60 20% 96%;
+    --foreground: 222 49% 8%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222 49% 8%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 49% 8%;
+
+    --primary: 0 0% 100%;
+    --primary-foreground: 222 49% 8%;
+
+    --secondary: 222 49% 8%;
+    --secondary-foreground: 60 20% 96%;
+
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+
+    --accent: 164 25% 39%;
+    --accent-foreground: 60 20% 96%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 222 49% 8%;
+
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    --background: 222 49% 8%;
+    --foreground: 60 20% 96%;
+
+    --card: 222 47% 11%;
+    --card-foreground: 60 20% 96%;
+
+    --popover: 222 47% 11%;
+    --popover-foreground: 60 20% 96%;
+
+    --primary: 0 0% 100%;
+    --primary-foreground: 222 49% 8%;
+
+    --secondary: 44 57% 54%;
+    --secondary-foreground: 222 49% 8%;
+
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 60 20% 96%;
+
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 60 20% 96%;
+
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 0 0% 100%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground font-sans antialiased selection:bg-gold-500/30 min-h-screen relative;
+  }
+  body::before {
+    content: "";
+    @apply absolute inset-0 pointer-events-none opacity-[0.03] z-[-1];
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+  }
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-display tracking-tight;
+  }
+}
+
+.glass {
+  @apply bg-white/40 backdrop-blur-lg border border-white/20 shadow-xl dark:bg-navy-900/40 dark:border-navy-700/50;
+}
