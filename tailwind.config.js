@@ -85,7 +85,7 @@ export default {
         }
       },
       fontFamily: {
-        sans: ['"DM Sans"', 'sans-serif'],
+        sans: ['"DM Sans"', '"Noto Sans"', 'sans-serif'],
         display: ['"Cormorant Garamond"', 'serif'],
       }
     },
