@@ -7,16 +7,19 @@ const ROLE_ACCESS: Record<UserRole, string[]> = {
     '/', '/members', '/attendance', '/giving', '/events', '/departments',
     '/communication', '/reports', '/settings', '/prayer', '/pastoral',
     '/volunteers', '/pledges', '/visitors',
+    '/workers', '/automation', '/children', '/media', '/cells',
   ],
   Pastor: [
     '/', '/members', '/attendance', '/giving', '/communication',
     '/reports', '/prayer', '/pastoral', '/volunteers', '/pledges', '/events', '/visitors',
+    '/workers', '/automation', '/children', '/media', '/cells',
   ],
   'Department Head': [
     '/', '/members', '/attendance', '/events', '/prayer', '/volunteers',
+    '/workers', '/children', '/media', '/cells',
   ],
   'Data Entry': [
-    '/', '/attendance', '/giving',
+    '/', '/attendance', '/giving', '/children',
   ],
 };
 
@@ -31,34 +34,42 @@ export const ROLE_ACTIONS: Record<UserRole, {
   canSendMessages: boolean;
   canManagePledges: boolean;
   canManageUsers: boolean;
+  canManageWorkers: boolean;
+  canManageChildren: boolean;
+  canManageMedia: boolean;
+  canManageCells: boolean;
+  canManageAutomation: boolean;
 }> = {
   Administrator: {
     canEditMembers: true, canDeleteMembers: true, canViewReports: true,
     canExportReports: true, canAccessSettings: true, canManageGiving: true,
     canManageDepartments: true, canSendMessages: true, canManagePledges: true,
-    canManageUsers: true,
+    canManageUsers: true, canManageWorkers: true, canManageChildren: true,
+    canManageMedia: true, canManageCells: true, canManageAutomation: true,
   },
   Pastor: {
     canEditMembers: true, canDeleteMembers: false, canViewReports: true,
     canExportReports: true, canAccessSettings: false, canManageGiving: true,
     canManageDepartments: false, canSendMessages: true, canManagePledges: true,
-    canManageUsers: false,
+    canManageUsers: false, canManageWorkers: true, canManageChildren: true,
+    canManageMedia: true, canManageCells: true, canManageAutomation: true,
   },
   'Department Head': {
     canEditMembers: false, canDeleteMembers: false, canViewReports: false,
     canExportReports: false, canAccessSettings: false, canManageGiving: false,
     canManageDepartments: false, canSendMessages: false, canManagePledges: false,
-    canManageUsers: false,
+    canManageUsers: false, canManageWorkers: true, canManageChildren: true,
+    canManageMedia: false, canManageCells: true, canManageAutomation: false,
   },
   'Data Entry': {
     canEditMembers: false, canDeleteMembers: false, canViewReports: false,
     canExportReports: false, canAccessSettings: false, canManageGiving: true,
     canManageDepartments: false, canSendMessages: false, canManagePledges: false,
-    canManageUsers: false,
+    canManageUsers: false, canManageWorkers: false, canManageChildren: true,
+    canManageMedia: false, canManageCells: false, canManageAutomation: false,
   },
 };
 
-// Re-export for convenience
 export type { UserRole };
 
 interface RoleContextValue {

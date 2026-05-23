@@ -172,3 +172,205 @@ export interface AuditLog {
   entityId: string;
   description: string;
 }
+
+// ============================================================
+// WORKERS MANAGEMENT
+// ============================================================
+export type WorkerStatus = 'Active' | 'Inactive' | 'Suspended' | 'On Leave';
+
+export interface Worker {
+  id: string;
+  memberId?: string;
+  firstName: string;
+  lastName: string;
+  phone: string;
+  email?: string;
+  departmentId: string;
+  roleTitle: string;
+  serviceUnit?: string;
+  status: WorkerStatus;
+  joinDate: string;
+  notes?: string;
+  createdAt: string;
+}
+
+export interface WorkerAttendance {
+  id: string;
+  workerId: string;
+  date: string;
+  serviceType: string;
+  present: boolean;
+  notes?: string;
+}
+
+export interface WorkerSchedule {
+  id: string;
+  workerId: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  duty: string;
+  departmentId: string;
+  notes?: string;
+  status: 'Scheduled' | 'Confirmed' | 'Cancelled';
+}
+
+// ============================================================
+// AUTOMATION / REMINDER SYSTEM
+// ============================================================
+export type ReminderType = 'Birthday' | 'Anniversary' | 'Event' | 'Meeting' | 'Custom';
+export type ReminderChannel = 'SMS' | 'WhatsApp' | 'Email';
+export type ReminderStatus = 'Sent' | 'Failed' | 'Pending';
+
+export interface ReminderTemplate {
+  id: string;
+  name: string;
+  type: ReminderType;
+  channel: ReminderChannel;
+  subject?: string;
+  body: string;
+  isActive: boolean;
+  daysBeforeEvent: number;
+  createdAt: string;
+}
+
+export interface ReminderLog {
+  id: string;
+  templateId?: string;
+  templateName?: string;
+  recipientName: string;
+  recipientContact: string;
+  channel: ReminderChannel;
+  type: ReminderType;
+  message: string;
+  sentAt: string;
+  status: ReminderStatus;
+}
+
+// ============================================================
+// CHILD CHECK-IN SYSTEM
+// ============================================================
+export interface Child {
+  id: string;
+  firstName: string;
+  lastName: string;
+  dateOfBirth?: string;
+  gender: Gender;
+  allergies?: string;
+  medicalNotes?: string;
+  classRoom?: string;
+  qrCode: string;
+  createdAt: string;
+}
+
+export interface Guardian {
+  id: string;
+  firstName: string;
+  lastName: string;
+  phone: string;
+  email?: string;
+  relationship: string;
+  childIds: string[];
+  memberId?: string;
+  securityCode: string;
+  isAuthorizedPickup: boolean;
+}
+
+export interface ChildCheckIn {
+  id: string;
+  childId: string;
+  guardianId: string;
+  checkInTime: string;
+  checkOutTime?: string;
+  checkInBy: string;
+  checkOutBy?: string;
+  date: string;
+  notes?: string;
+  status: 'Checked In' | 'Checked Out';
+}
+
+// ============================================================
+// SERMON & MEDIA LIBRARY
+// ============================================================
+export interface Preacher {
+  id: string;
+  name: string;
+  title?: string;
+  bio?: string;
+  avatarUrl?: string;
+}
+
+export interface SermonCategory {
+  id: string;
+  name: string;
+  color: string;
+}
+
+export interface Sermon {
+  id: string;
+  title: string;
+  preacherId?: string;
+  categoryId?: string;
+  scripture?: string;
+  description?: string;
+  date: string;
+  audioUrl?: string;
+  videoUrl?: string;
+  pdfUrl?: string;
+  thumbnailUrl?: string;
+  tags: string[];
+  duration?: string;
+  isFeatured: boolean;
+  viewCount: number;
+  createdAt: string;
+}
+
+// ============================================================
+// CELL / SMALL GROUP MANAGEMENT
+// ============================================================
+export interface CellGroup {
+  id: string;
+  name: string;
+  leaderId?: string;
+  coLeaderId?: string;
+  meetingDay?: string;
+  meetingTime?: string;
+  location?: string;
+  description?: string;
+  campusId?: string;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export interface CellMember {
+  id: string;
+  cellId: string;
+  memberId: string;
+  role: 'Leader' | 'Co-Leader' | 'Member';
+  joinDate: string;
+}
+
+export interface CellAttendance {
+  id: string;
+  cellId: string;
+  date: string;
+  presentMemberIds: string[];
+  topicDiscussed?: string;
+  offerings?: number;
+  notes?: string;
+}
+
+export interface CellReport {
+  id: string;
+  cellId: string;
+  date: string;
+  reportedBy: string;
+  attendance: number;
+  newVisitors: number;
+  conversions: number;
+  topicCovered: string;
+  highlights?: string;
+  challenges?: string;
+  prayerPoints?: string;
+  createdAt: string;
+}

@@ -18,6 +18,11 @@ import PastoralCare from './pages/PastoralCare';
 import Volunteers from './pages/Volunteers';
 import Pledges from './pages/Pledges';
 import Visitors from './pages/Visitors';
+import Workers from './pages/Workers';
+import Automation from './pages/Automation';
+import ChildCheckin from './pages/ChildCheckin';
+import Media from './pages/Media';
+import CellGroups from './pages/CellGroups';
 
 function LoadingScreen() {
   return (
@@ -52,6 +57,11 @@ function AppRoutes() {
         <Route path="volunteers" element={<Volunteers />} />
         <Route path="pledges" element={<Pledges />} />
         <Route path="visitors" element={<Visitors />} />
+        <Route path="workers" element={<Workers />} />
+        <Route path="automation" element={<Automation />} />
+        <Route path="children" element={<ChildCheckin />} />
+        <Route path="media" element={<Media />} />
+        <Route path="cells" element={<CellGroups />} />
       </Route>
     </Routes>
   );

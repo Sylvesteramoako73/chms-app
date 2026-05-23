@@ -4,6 +4,7 @@ import {
   LayoutDashboard, Users, CalendarCheck, Coins,
   CalendarDays, Settings, MessageSquare, PieChart, Building2, X,
   Heart, HeartHandshake, ClipboardList, Target, LogOut, Church, UserPlus,
+  UserCheck, BellRing, Baby, PlayCircle, Network,
 } from 'lucide-react';
 import { cn } from '@/utils';
 import { useRole, type UserRole } from '@/context/RoleContext';
@@ -21,6 +22,11 @@ const navItems = [
   { name: 'Volunteers', path: '/volunteers', icon: ClipboardList },
   { name: 'Pledges', path: '/pledges', icon: Target },
   { name: 'Visitor Follow-up', path: '/visitors', icon: UserPlus },
+  { name: 'Workers', path: '/workers', icon: UserCheck },
+  { name: 'Cell Groups', path: '/cells', icon: Network },
+  { name: 'Child Check-In', path: '/children', icon: Baby },
+  { name: 'Media Library', path: '/media', icon: PlayCircle },
+  { name: 'Automation', path: '/automation', icon: BellRing },
   { name: 'Communication', path: '/communication', icon: MessageSquare },
   { name: 'Reports', path: '/reports', icon: PieChart },
   { name: 'Settings', path: '/settings', icon: Settings },
