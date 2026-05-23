@@ -208,6 +208,56 @@ export interface OutreachProspect {
 }
 
 // ============================================================
+// ASSETS & FACILITY MANAGEMENT
+// ============================================================
+export type AssetCategory = 'Equipment' | 'Instrument' | 'Vehicle' | 'Furniture' | 'Electronics' | 'Building' | 'Other';
+export type AssetCondition = 'Excellent' | 'Good' | 'Fair' | 'Poor' | 'Out of Service';
+export type AssetStatus = 'Active' | 'In Maintenance' | 'Disposed';
+export type FacilityType = 'Sanctuary' | 'Hall' | 'Office' | 'Classroom' | 'Kitchen' | 'Storage' | 'Outdoor' | 'Other';
+export type MaintenanceType = 'Preventive' | 'Repair' | 'Inspection' | 'Replacement';
+export type MaintenanceStatus = 'Pending' | 'In Progress' | 'Completed' | 'Cancelled';
+
+export interface Asset {
+  id: string;
+  name: string;
+  category: AssetCategory;
+  serialNumber?: string;
+  purchaseDate?: string;
+  purchaseCost?: number;
+  currentValue?: number;
+  condition: AssetCondition;
+  status: AssetStatus;
+  facilityId?: string;
+  assignedTo?: string;
+  notes?: string;
+  createdAt: string;
+}
+
+export interface Facility {
+  id: string;
+  name: string;
+  type: FacilityType;
+  capacity?: number;
+  features: string[];
+  notes?: string;
+}
+
+export interface MaintenanceRecord {
+  id: string;
+  entityType: 'Asset' | 'Facility';
+  entityId: string;
+  title: string;
+  type: MaintenanceType;
+  status: MaintenanceStatus;
+  reportedDate: string;
+  completedDate?: string;
+  cost?: number;
+  performedBy?: string;
+  notes?: string;
+  createdAt: string;
+}
+
+// ============================================================
 // WORKERS MANAGEMENT
 // ============================================================
 export type WorkerStatus = 'Active' | 'Inactive' | 'Suspended' | 'On Leave';

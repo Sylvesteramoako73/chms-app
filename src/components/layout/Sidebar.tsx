@@ -4,7 +4,7 @@ import {
   LayoutDashboard, Users, CalendarCheck, Coins,
   CalendarDays, Settings, MessageSquare, PieChart, Building2, X,
   Heart, HeartHandshake, ClipboardList, Target, LogOut, Church, UserPlus,
-  UserCheck, BellRing, Baby, PlayCircle, Network, Megaphone,
+  UserCheck, BellRing, Baby, PlayCircle, Network, Megaphone, Boxes,
 } from 'lucide-react';
 import { cn } from '@/utils';
 import { useRole, type UserRole } from '@/context/RoleContext';
@@ -23,6 +23,7 @@ const navItems = [
   { name: 'Pledges', path: '/pledges', icon: Target },
   { name: 'Visitor Follow-up', path: '/visitors', icon: UserPlus },
   { name: 'Outreach & Evangelism', path: '/outreach', icon: Megaphone },
+  { name: 'Assets & Facilities', path: '/assets', icon: Boxes },
   { name: 'Workers', path: '/workers', icon: UserCheck },
   { name: 'Cell Groups', path: '/cells', icon: Network },
   { name: 'Child Check-In', path: '/children', icon: Baby },

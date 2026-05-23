@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
-import type { Member, Department, SmallGroup, AttendanceRecord, GivingRecord, EventRecord, Campus, PrayerRequest, PastoralVisit, VolunteerRole, Campaign, Pledge, PledgePayment, AuditLog, AuditEntity, AuditAction, VisitorRecord, OutreachActivity, OutreachProspect } from '../types';
+import type { Member, Department, SmallGroup, AttendanceRecord, GivingRecord, EventRecord, Campus, PrayerRequest, PastoralVisit, VolunteerRole, Campaign, Pledge, PledgePayment, AuditLog, AuditEntity, AuditAction, VisitorRecord, OutreachActivity, OutreachProspect, Asset, Facility, MaintenanceRecord } from '../types';
 import { supabase } from '../lib/supabase';
 
 // ---------------------------------------------------------------------------
@@ -157,6 +157,19 @@ interface DataContextType {
   addOutreachProspect: (p: OutreachProspect) => void;
   updateOutreachProspect: (p: OutreachProspect) => void;
   deleteOutreachProspect: (id: string) => void;
+
+  assets: Asset[];
+  facilities: Facility[];
+  maintenanceRecords: MaintenanceRecord[];
+  addAsset: (a: Asset) => void;
+  updateAsset: (a: Asset) => void;
+  deleteAsset: (id: string) => void;
+  addFacility: (f: Facility) => void;
+  updateFacility: (f: Facility) => void;
+  deleteFacility: (id: string) => void;
+  addMaintenanceRecord: (r: MaintenanceRecord) => void;
+  updateMaintenanceRecord: (r: MaintenanceRecord) => void;
+  deleteMaintenanceRecord: (id: string) => void;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
@@ -192,6 +205,18 @@ export function DataProvider({ children }: { children: ReactNode }) {
     try { return JSON.parse(localStorage.getItem('chms_outreach_prospects') ?? '[]'); }
     catch { return []; }
   });
+  const [assets, setAssets] = useState<Asset[]>(() => {
+    try { return JSON.parse(localStorage.getItem('chms_assets') ?? '[]'); }
+    catch { return []; }
+  });
+  const [facilities, setFacilities] = useState<Facility[]>(() => {
+    try { return JSON.parse(localStorage.getItem('chms_facilities') ?? '[]'); }
+    catch { return []; }
+  });
+  const [maintenanceRecords, setMaintenanceRecords] = useState<MaintenanceRecord[]>(() => {
+    try { return JSON.parse(localStorage.getItem('chms_maintenance') ?? '[]'); }
+    catch { return []; }
+  });
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
 
   useEffect(() => {
@@ -203,6 +228,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     localStorage.setItem('chms_outreach_prospects', JSON.stringify(outreachProspects));
   }, [outreachProspects]);
+  useEffect(() => { localStorage.setItem('chms_assets', JSON.stringify(assets)); }, [assets]);
+  useEffect(() => { localStorage.setItem('chms_facilities', JSON.stringify(facilities)); }, [facilities]);
+  useEffect(() => { localStorage.setItem('chms_maintenance', JSON.stringify(maintenanceRecords)); }, [maintenanceRecords]);
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', theme === 'dark');
@@ -498,6 +526,19 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const deleteVisitor = (id: string) => setVisitors(prev => prev.filter(x => x.id !== id));
 
   // ---------------------------------------------------------------------------
+  // Assets & Facilities (localStorage)
+  // ---------------------------------------------------------------------------
+  const addAsset = (a: Asset) => setAssets(prev => [a, ...prev]);
+  const updateAsset = (a: Asset) => setAssets(prev => prev.map(x => x.id === a.id ? a : x));
+  const deleteAsset = (id: string) => setAssets(prev => prev.filter(x => x.id !== id));
+  const addFacility = (f: Facility) => setFacilities(prev => [f, ...prev]);
+  const updateFacility = (f: Facility) => setFacilities(prev => prev.map(x => x.id === f.id ? f : x));
+  const deleteFacility = (id: string) => setFacilities(prev => prev.filter(x => x.id !== id));
+  const addMaintenanceRecord = (r: MaintenanceRecord) => setMaintenanceRecords(prev => [r, ...prev]);
+  const updateMaintenanceRecord = (r: MaintenanceRecord) => setMaintenanceRecords(prev => prev.map(x => x.id === r.id ? r : x));
+  const deleteMaintenanceRecord = (id: string) => setMaintenanceRecords(prev => prev.filter(x => x.id !== id));
+
+  // ---------------------------------------------------------------------------
   // Outreach & Evangelism (localStorage)
   // ---------------------------------------------------------------------------
   const addOutreachActivity = (a: OutreachActivity) => setOutreachActivities(prev => [a, ...prev]);
@@ -530,6 +571,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
       outreachActivities, outreachProspects,
       addOutreachActivity, updateOutreachActivity, deleteOutreachActivity,
       addOutreachProspect, updateOutreachProspect, deleteOutreachProspect,
+      assets, facilities, maintenanceRecords,
+      addAsset, updateAsset, deleteAsset,
+      addFacility, updateFacility, deleteFacility,
+      addMaintenanceRecord, updateMaintenanceRecord, deleteMaintenanceRecord,
     }}>
       {children}
     </DataContext.Provider>
