@@ -130,6 +130,8 @@ export default function Reports() {
     }
     setExporting(true);
     try {
+      // jsPDF built-in fonts only support Latin-1; use ISO code instead of ₵
+      const GHS = 'GHS'; // eslint-disable-line @typescript-eslint/no-shadow
       const { jsPDF } = await import('jspdf');
       const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
       const pageW = doc.internal.pageSize.getWidth();
@@ -322,6 +324,8 @@ export default function Reports() {
     }
     setExporting(true);
     try {
+      // jsPDF built-in fonts only support Latin-1; use ISO code instead of ₵
+      const GHS = 'GHS'; // eslint-disable-line @typescript-eslint/no-shadow
       const { jsPDF } = await import('jspdf');
       const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
       const W = doc.internal.pageSize.getWidth();
