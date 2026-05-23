@@ -178,6 +178,36 @@ export interface AuditLog {
 }
 
 // ============================================================
+// OUTREACH & EVANGELISM
+// ============================================================
+export type OutreachType = 'House-to-House' | 'Street Evangelism' | 'Campus Outreach' | 'Community Event' | 'Online' | 'Other';
+export type OutreachFollowUpStatus = 'Contacted' | 'Invited' | 'Attended' | 'Converted';
+export type InterestLevel = 'High' | 'Medium' | 'Low';
+
+export interface OutreachActivity {
+  id: string;
+  title: string;
+  type: OutreachType;
+  date: string;
+  location: string;
+  teamMemberIds: string[];
+  prospectsReached: number;
+  notes?: string;
+}
+
+export interface OutreachProspect {
+  id: string;
+  activityId?: string;
+  name: string;
+  phone?: string;
+  address?: string;
+  interestLevel: InterestLevel;
+  status: OutreachFollowUpStatus;
+  notes?: string;
+  createdAt: string;
+}
+
+// ============================================================
 // WORKERS MANAGEMENT
 // ============================================================
 export type WorkerStatus = 'Active' | 'Inactive' | 'Suspended' | 'On Leave';

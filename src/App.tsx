@@ -18,6 +18,7 @@ import PastoralCare from './pages/PastoralCare';
 import Volunteers from './pages/Volunteers';
 import Pledges from './pages/Pledges';
 import Visitors from './pages/Visitors';
+import Outreach from './pages/Outreach';
 import Workers from './pages/Workers';
 import Automation from './pages/Automation';
 import ChildCheckin from './pages/ChildCheckin';
@@ -57,6 +58,7 @@ function AppRoutes() {
         <Route path="volunteers" element={<Volunteers />} />
         <Route path="pledges" element={<Pledges />} />
         <Route path="visitors" element={<Visitors />} />
+        <Route path="outreach" element={<Outreach />} />
         <Route path="workers" element={<Workers />} />
         <Route path="automation" element={<Automation />} />
         <Route path="children" element={<ChildCheckin />} />

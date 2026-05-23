@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
-import type { Member, Department, SmallGroup, AttendanceRecord, GivingRecord, EventRecord, Campus, PrayerRequest, PastoralVisit, VolunteerRole, Campaign, Pledge, PledgePayment, AuditLog, AuditEntity, AuditAction, VisitorRecord } from '../types';
+import type { Member, Department, SmallGroup, AttendanceRecord, GivingRecord, EventRecord, Campus, PrayerRequest, PastoralVisit, VolunteerRole, Campaign, Pledge, PledgePayment, AuditLog, AuditEntity, AuditAction, VisitorRecord, OutreachActivity, OutreachProspect } from '../types';
 import { supabase } from '../lib/supabase';
 
 // ---------------------------------------------------------------------------
@@ -148,6 +148,15 @@ interface DataContextType {
   addVisitor: (v: VisitorRecord) => void;
   updateVisitor: (v: VisitorRecord) => void;
   deleteVisitor: (id: string) => void;
+
+  outreachActivities: OutreachActivity[];
+  outreachProspects: OutreachProspect[];
+  addOutreachActivity: (a: OutreachActivity) => void;
+  updateOutreachActivity: (a: OutreachActivity) => void;
+  deleteOutreachActivity: (id: string) => void;
+  addOutreachProspect: (p: OutreachProspect) => void;
+  updateOutreachProspect: (p: OutreachProspect) => void;
+  deleteOutreachProspect: (id: string) => void;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
@@ -175,11 +184,25 @@ export function DataProvider({ children }: { children: ReactNode }) {
     try { return JSON.parse(localStorage.getItem('chms_visitors') ?? '[]'); }
     catch { return []; }
   });
+  const [outreachActivities, setOutreachActivities] = useState<OutreachActivity[]>(() => {
+    try { return JSON.parse(localStorage.getItem('chms_outreach_activities') ?? '[]'); }
+    catch { return []; }
+  });
+  const [outreachProspects, setOutreachProspects] = useState<OutreachProspect[]>(() => {
+    try { return JSON.parse(localStorage.getItem('chms_outreach_prospects') ?? '[]'); }
+    catch { return []; }
+  });
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
 
   useEffect(() => {
     localStorage.setItem('chms_visitors', JSON.stringify(visitors));
   }, [visitors]);
+  useEffect(() => {
+    localStorage.setItem('chms_outreach_activities', JSON.stringify(outreachActivities));
+  }, [outreachActivities]);
+  useEffect(() => {
+    localStorage.setItem('chms_outreach_prospects', JSON.stringify(outreachProspects));
+  }, [outreachProspects]);
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', theme === 'dark');
@@ -187,9 +210,12 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   const toggleTheme = () => setTheme(t => t === 'dark' ? 'light' : 'dark');
 
-  // Load all data from Supabase on mount
+  // Load all data from Supabase — called on mount and on SIGNED_IN so that
+  // data reloads correctly after a logout → page refresh → login sequence
+  // (Supabase RLS returns empty arrays when there is no active session).
   useEffect(() => {
     async function loadAll() {
+      setLoading(true);
       const [
         { data: m }, { data: d }, { data: sg }, { data: c },
         { data: att }, { data: g }, { data: ev },
@@ -228,6 +254,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
       setLoading(false);
     }
     loadAll();
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'SIGNED_IN') loadAll();
+    });
+    return () => subscription.unsubscribe();
   }, []);
 
   // Audit helper — optimistic local + async save
@@ -467,6 +497,16 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const updateVisitor = (v: VisitorRecord) => setVisitors(prev => prev.map(x => x.id === v.id ? v : x));
   const deleteVisitor = (id: string) => setVisitors(prev => prev.filter(x => x.id !== id));
 
+  // ---------------------------------------------------------------------------
+  // Outreach & Evangelism (localStorage)
+  // ---------------------------------------------------------------------------
+  const addOutreachActivity = (a: OutreachActivity) => setOutreachActivities(prev => [a, ...prev]);
+  const updateOutreachActivity = (a: OutreachActivity) => setOutreachActivities(prev => prev.map(x => x.id === a.id ? a : x));
+  const deleteOutreachActivity = (id: string) => setOutreachActivities(prev => prev.filter(x => x.id !== id));
+  const addOutreachProspect = (p: OutreachProspect) => setOutreachProspects(prev => [p, ...prev]);
+  const updateOutreachProspect = (p: OutreachProspect) => setOutreachProspects(prev => prev.map(x => x.id === p.id ? p : x));
+  const deleteOutreachProspect = (id: string) => setOutreachProspects(prev => prev.filter(x => x.id !== id));
+
   return (
     <DataContext.Provider value={{
       loading,
@@ -487,6 +527,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
       addCampaign, updateCampaign, deleteCampaign,
       addPledge, updatePledge, deletePledge, recordPledgePayment,
       addVisitor, updateVisitor, deleteVisitor,
+      outreachActivities, outreachProspects,
+      addOutreachActivity, updateOutreachActivity, deleteOutreachActivity,
+      addOutreachProspect, updateOutreachProspect, deleteOutreachProspect,
     }}>
       {children}
     </DataContext.Provider>

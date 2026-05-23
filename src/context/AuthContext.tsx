@@ -88,12 +88,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       const u = session?.user ?? null;
       setUser(u);
       if (u) {
-        fetchProfile(u);
-        fetchAllProfiles();
+        // Skip TOKEN_REFRESHED — it fires every hour and can temporarily revert the role
+        // to 'Data Entry' if the profiles table query is slow or fails during the re-fetch.
+        if (event !== 'TOKEN_REFRESHED') {
+          fetchProfile(u);
+          fetchAllProfiles();
+        }
       } else {
         setProfile(null);
         setAllProfiles([]);
