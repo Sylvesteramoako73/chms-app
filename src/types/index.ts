@@ -64,6 +64,10 @@ export interface AttendanceRecord {
   presentMemberIds: string[];
   visitorsCount: number;
   campusId?: string;
+  maleCount?: number;
+  femaleCount?: number;
+  childrenCount?: number;
+  quickCount?: number;
 }
 
 export interface GivingRecord {
@@ -178,6 +182,8 @@ export interface AuditLog {
 // ============================================================
 export type WorkerStatus = 'Active' | 'Inactive' | 'Suspended' | 'On Leave';
 
+export type EmploymentType = 'Full-time' | 'Part-time' | 'Contract';
+
 export interface Worker {
   id: string;
   memberId?: string;
@@ -185,11 +191,10 @@ export interface Worker {
   lastName: string;
   phone: string;
   email?: string;
-  departmentId: string;
-  roleTitle: string;
-  serviceUnit?: string;
+  jobTitle: string;
+  employmentType: EmploymentType;
   status: WorkerStatus;
-  joinDate: string;
+  startDate: string;
   notes?: string;
   createdAt: string;
 }
@@ -210,7 +215,6 @@ export interface WorkerSchedule {
   startTime: string;
   endTime: string;
   duty: string;
-  departmentId: string;
   notes?: string;
   status: 'Scheduled' | 'Confirmed' | 'Cancelled';
 }

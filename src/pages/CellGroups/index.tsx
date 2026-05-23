@@ -413,10 +413,10 @@ export default function CellGroups() {
             </div>
             <div className="space-y-1.5 col-span-2">
               <Label>Leader</Label>
-              <Select value={cForm.leaderId ?? ''} onValueChange={v => setCForm(f => ({ ...f, leaderId: v || undefined }))}>
+              <Select value={cForm.leaderId ?? 'none'} onValueChange={v => setCForm(f => ({ ...f, leaderId: v === 'none' ? undefined : v }))}>
                 <SelectTrigger><SelectValue placeholder="Select leader…" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">None</SelectItem>
+                  <SelectItem value="none">None</SelectItem>
                   {members.map(m => <SelectItem key={m.id} value={m.id}>{m.firstName} {m.lastName}</SelectItem>)}
                 </SelectContent>
               </Select>
@@ -438,10 +438,10 @@ export default function CellGroups() {
             </div>
             <div className="space-y-1.5 col-span-2">
               <Label>Campus</Label>
-              <Select value={cForm.campusId ?? ''} onValueChange={v => setCForm(f => ({ ...f, campusId: v || undefined }))}>
+              <Select value={cForm.campusId ?? 'all'} onValueChange={v => setCForm(f => ({ ...f, campusId: v === 'all' ? undefined : v }))}>
                 <SelectTrigger><SelectValue placeholder="Select campus…" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Campuses</SelectItem>
+                  <SelectItem value="all">All Campuses</SelectItem>
                   {campuses.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
                 </SelectContent>
               </Select>

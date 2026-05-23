@@ -11,7 +11,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Calendar, MapPin, Clock, Users, Pencil, Trash2, RefreshCw } from 'lucide-react';
+import { Plus, Calendar, MapPin, Clock, Users, Pencil, Trash2, RefreshCw, Bell, Send } from 'lucide-react';
+import { sendSMS, sendWhatsApp } from '@/lib/messaging';
 import { format, parseISO, isAfter, subDays } from 'date-fns';
 
 const EMPTY_FORM: Omit<EventRecord, 'id'> = {
@@ -21,12 +22,17 @@ const EMPTY_FORM: Omit<EventRecord, 'id'> = {
 };
 
 export default function Events() {
-  const { events, departments, addEvent, updateEvent, deleteEvent } = useData();
+  const { events, departments, members, addEvent, updateEvent, deleteEvent } = useData();
   const { toast } = useToast();
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<EventRecord | null>(null);
   const [form, setForm] = useState<Omit<EventRecord, 'id'>>(EMPTY_FORM);
+  const [notifyOpen, setNotifyOpen] = useState(false);
+  const [notifyEvent, setNotifyEvent] = useState<EventRecord | null>(null);
+  const [notifyMessage, setNotifyMessage] = useState('');
+  const [notifyGroup, setNotifyGroup] = useState<'all' | 'department'>('all');
+  const [sending, setSending] = useState<'sms' | 'wa' | null>(null);
 
   const today = new Date();
   const upcoming = events
@@ -72,6 +78,42 @@ export default function Events() {
     toast({ title: 'Event deleted', description: `"${event.title}" has been removed.` });
   };
 
+  const openNotify = (event: EventRecord) => {
+    setNotifyEvent(event);
+    setNotifyMessage(
+      `📅 ${event.title}\n` +
+      `📆 ${format(parseISO(event.date), 'EEEE, MMMM d, yyyy')} at ${event.time}\n` +
+      `📍 ${event.location}` +
+      (event.description ? `\n\n${event.description}` : '')
+    );
+    setNotifyGroup(event.departmentId ? 'department' : 'all');
+    setNotifyOpen(true);
+  };
+
+  const getRecipientPhones = (): string[] => {
+    let targets = members.filter(m => m.status === 'Active' || m.status === 'New Convert');
+    if (notifyGroup === 'department' && notifyEvent?.departmentId) {
+      targets = targets.filter(m => m.departmentId === notifyEvent.departmentId);
+    }
+    return targets.map(m => m.phone).filter(Boolean);
+  };
+
+  const handleNotifySMS = async () => {
+    setSending('sms');
+    await sendSMS(getRecipientPhones(), notifyMessage, ({ title, description, variant }) =>
+      toast({ title, description, variant })
+    );
+    setSending(null);
+  };
+
+  const handleNotifyWA = async () => {
+    setSending('wa');
+    await sendWhatsApp(getRecipientPhones(), notifyMessage, ({ title, description, variant }) =>
+      toast({ title, description, variant })
+    );
+    setSending(null);
+  };
+
   const EventCard = ({ event }: { event: EventRecord }) => {
     const dept = departments.find(d => d.id === event.departmentId);
     return (
@@ -89,6 +131,9 @@ export default function Events() {
               )}
             </div>
             <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+              <Button variant="ghost" size="icon" className="h-7 w-7 text-gold-600 hover:text-gold-700 hover:bg-gold-50 dark:hover:bg-gold-900/20" title="Notify members" onClick={() => openNotify(event)}>
+                <Bell className="w-3.5 h-3.5" />
+              </Button>
               <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(event)}>
                 <Pencil className="w-3.5 h-3.5" />
               </Button>
@@ -236,6 +281,70 @@ export default function Events() {
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
             <Button onClick={handleSave} className="bg-white hover:bg-gray-50 text-navy-900 font-medium">
               {editing ? 'Save Changes' : 'Create Event'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      {/* Notify Dialog */}
+      <Dialog open={notifyOpen} onOpenChange={setNotifyOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="font-display text-xl flex items-center gap-2">
+              <Bell className="w-5 h-5 text-gold-500" />
+              Notify Members
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-1">
+            {notifyEvent && (
+              <p className="text-sm text-muted-foreground">
+                Sending notification for <span className="font-semibold text-foreground">{notifyEvent.title}</span>
+              </p>
+            )}
+            <div className="space-y-1.5">
+              <Label>Recipients</Label>
+              <Select value={notifyGroup} onValueChange={v => setNotifyGroup(v as 'all' | 'department')}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Active Members ({members.filter(m => m.status === 'Active' || m.status === 'New Convert').length})</SelectItem>
+                  {notifyEvent?.departmentId && (
+                    <SelectItem value="department">
+                      {departments.find(d => d.id === notifyEvent.departmentId)?.name ?? 'Department'} members only
+                    </SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Message</Label>
+              <Textarea
+                rows={6}
+                value={notifyMessage}
+                onChange={e => setNotifyMessage(e.target.value)}
+                className="text-sm resize-none"
+              />
+              <p className="text-xs text-muted-foreground">{notifyMessage.length} characters · {getRecipientPhones().length} recipients</p>
+            </div>
+          </div>
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button variant="outline" onClick={() => setNotifyOpen(false)}>Cancel</Button>
+            <Button
+              variant="outline"
+              className="gap-2 border-sage-400 text-sage-700 hover:bg-sage-50 dark:text-sage-400 dark:hover:bg-sage-900/20"
+              disabled={sending !== null}
+              onClick={handleNotifySMS}
+            >
+              {sending === 'sms' ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+              Send SMS
+            </Button>
+            <Button
+              className="gap-2 bg-[#25D366] hover:bg-[#1ebe5d] text-white"
+              disabled={sending !== null}
+              onClick={handleNotifyWA}
+            >
+              {sending === 'wa' ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+              Send WhatsApp
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { useData } from '@/context/DataContext';
-import type { GivingRecord, GivingType, PaymentMethod } from '@/types';
+import type { GivingRecord, GivingType, PaymentMethod, Member } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,9 +9,10 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
-import { Coins, Plus, TrendingUp, Search, Trash2, FileText } from 'lucide-react';
+import { Coins, Plus, TrendingUp, Search, Trash2, FileText, User, Download } from 'lucide-react';
 import { format, parseISO, isSameMonth, subMonths, startOfMonth, endOfMonth, eachMonthOfInterval } from 'date-fns';
 import jsPDF from 'jspdf';
 
@@ -36,6 +37,9 @@ export default function Giving() {
   const [typeFilter, setTypeFilter] = useState('all');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
+  const [memberGivingMonth, setMemberGivingMonth] = useState(format(new Date(), 'yyyy-MM'));
+  const [memberDetailOpen, setMemberDetailOpen] = useState(false);
+  const [selectedMemberGiving, setSelectedMemberGiving] = useState<{ member: Member | null; memberId: string; records: GivingRecord[] } | null>(null);
 
   const thisMonth = new Date();
   const thisMonthRecords = giving.filter(g => isSameMonth(parseISO(g.date), thisMonth));
@@ -57,6 +61,24 @@ export default function Giving() {
       };
     });
   }, [giving]);
+
+  const memberGivingSummary = useMemo(() => {
+    const [y, m] = memberGivingMonth.split('-').map(Number);
+    const target = new Date(y, m - 1, 1);
+    const map = new Map<string, { memberId: string; total: number; tithe: number; offering: number; other: number; records: GivingRecord[] }>();
+    giving.forEach(g => {
+      if (!isSameMonth(parseISO(g.date), target)) return;
+      const key = g.memberId || '__anonymous__';
+      if (!map.has(key)) map.set(key, { memberId: key, total: 0, tithe: 0, offering: 0, other: 0, records: [] });
+      const e = map.get(key)!;
+      e.total += g.amount;
+      if (g.type === 'Tithe') e.tithe += g.amount;
+      else if (g.type === 'Offering') e.offering += g.amount;
+      else e.other += g.amount;
+      e.records.push(g);
+    });
+    return Array.from(map.values()).sort((a, b) => b.total - a.total);
+  }, [giving, memberGivingMonth]);
 
   const filtered = giving
     .filter(g => {
@@ -167,6 +189,85 @@ export default function Giving() {
     doc.save(`${receiptNo}.pdf`);
   };
 
+  const generatePeriodReceipt = (memberId: string, records: GivingRecord[]) => {
+    const member = memberId !== '__anonymous__' ? members.find(m => m.id === memberId) : null;
+    const memberName = member ? `${member.firstName} ${member.lastName}` : 'Anonymous';
+    const [yr, mo] = memberGivingMonth.split('-').map(Number);
+    const periodLabel = format(new Date(yr, mo - 1, 1), 'MMMM yyyy');
+    const total = records.reduce((s, r) => s + r.amount, 0);
+
+    const doc = new jsPDF();
+    const W = doc.internal.pageSize.getWidth();
+
+    doc.setFillColor(11, 17, 32);
+    doc.rect(0, 0, W, 44, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(22);
+    doc.setTextColor(201, 168, 76);
+    doc.text('ChurchCare', W / 2, 18, { align: 'center' });
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(180, 180, 180);
+    doc.text('Giving Statement', W / 2, 28, { align: 'center' });
+    doc.text(periodLabel, W / 2, 37, { align: 'center' });
+
+    doc.setTextColor(11, 17, 32);
+    doc.setFontSize(13);
+    doc.setFont('helvetica', 'bold');
+    doc.text(memberName, 14, 58);
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(120, 120, 120);
+    doc.text(`Period: ${periodLabel}`, 14, 67);
+    doc.setDrawColor(201, 168, 76);
+    doc.setLineWidth(0.6);
+    doc.line(14, 72, W - 14, 72);
+
+    let y = 83;
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(11, 17, 32);
+    doc.text('Date', 14, y);
+    doc.text('Type', 60, y);
+    doc.text('Method', 110, y);
+    doc.text('Amount', W - 14, y, { align: 'right' });
+    y += 6;
+    doc.setDrawColor(220, 220, 220);
+    doc.line(14, y, W - 14, y);
+    y += 8;
+
+    [...records].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()).forEach(r => {
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(60, 60, 60);
+      doc.text(format(parseISO(r.date), 'MMM d'), 14, y);
+      doc.text(r.type, 60, y);
+      doc.text(r.paymentMethod, 110, y);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(11, 17, 32);
+      doc.text(`GHS ${r.amount.toLocaleString()}`, W - 14, y, { align: 'right' });
+      y += 11;
+    });
+
+    doc.setDrawColor(201, 168, 76);
+    doc.line(14, y + 2, W - 14, y + 2);
+    y += 12;
+    doc.setFillColor(248, 249, 250);
+    doc.setDrawColor(201, 168, 76);
+    doc.roundedRect(14, y, W - 28, 22, 3, 3, 'FD');
+    doc.setFontSize(13);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(11, 17, 32);
+    doc.text(`Total: GHS ${total.toLocaleString()}`, W / 2, y + 14, { align: 'center' });
+
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'italic');
+    doc.setTextColor(160, 160, 160);
+    doc.text('Thank you for your faithful giving. May God bless you abundantly!', W / 2, y + 38, { align: 'center' });
+    doc.text(`Generated on ${format(new Date(), 'MMM d, yyyy HH:mm')}`, W / 2, y + 46, { align: 'center' });
+
+    doc.save(`Giving-Statement-${memberName.replace(/\s+/g, '-')}-${periodLabel.replace(/\s+/g, '-')}.pdf`);
+  };
+
   const memberOptions = members.filter(m => m.status === 'Active' || m.status === 'New Convert');
 
   return (
@@ -242,79 +343,209 @@ export default function Giving() {
         </CardContent>
       </Card>
 
-      {/* Records Table */}
-      <Card className="glass border-none shadow-sm">
-        <CardHeader className="pb-3">
-          <div className="flex flex-col sm:flex-row gap-3">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input placeholder="Search by member name…" className="pl-9" value={search} onChange={e => setSearch(e.target.value)} />
-            </div>
-            <Select value={typeFilter} onValueChange={setTypeFilter}>
-              <SelectTrigger className="w-full sm:w-[160px]"><SelectValue placeholder="All Types" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Types</SelectItem>
-                <SelectItem value="Tithe">Tithe</SelectItem>
-                <SelectItem value="Offering">Offering</SelectItem>
-                <SelectItem value="Seed">Seed</SelectItem>
-                <SelectItem value="Project">Project</SelectItem>
-                <SelectItem value="Other">Other</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </CardHeader>
-        <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow className="border-border/40">
-                  <TableHead className="pl-6">Date</TableHead>
-                  <TableHead>Member</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead className="hidden sm:table-cell">Method</TableHead>
-                  <TableHead className="text-right">Amount</TableHead>
-                  <TableHead className="text-right pr-6">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filtered.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={6} className="py-16 text-center text-muted-foreground">No records found.</TableCell>
-                  </TableRow>
-                )}
-                {filtered.map(record => {
-                  const member = members.find(m => m.id === record.memberId);
-                  return (
-                    <TableRow key={record.id} className="hover:bg-muted/20 border-border/30 transition-colors">
-                      <TableCell className="pl-6 font-medium text-sm">{format(parseISO(record.date), 'MMM d, yyyy')}</TableCell>
-                      <TableCell className="text-sm">
-                        {member ? `${member.firstName} ${member.lastName}` : <span className="text-muted-foreground italic">Anonymous</span>}
-                      </TableCell>
-                      <TableCell>
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold border ${TYPE_COLORS[record.type] ?? TYPE_COLORS.Other}`}>
-                          {record.type}
-                        </span>
-                      </TableCell>
-                      <TableCell className="hidden sm:table-cell text-sm text-muted-foreground">{record.paymentMethod}</TableCell>
-                      <TableCell className="text-right font-bold text-gold-600 dark:text-gold-400">₵{record.amount.toLocaleString()}</TableCell>
-                      <TableCell className="text-right pr-6">
-                        <div className="flex items-center justify-end gap-1">
-                          <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground" title="Download receipt" onClick={() => generateReceipt(record)}>
-                            <FileText className="w-3.5 h-3.5" />
-                          </Button>
-                          <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => handleDelete(record)}>
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </Button>
-                        </div>
-                      </TableCell>
+      <Tabs defaultValue="records" className="space-y-4">
+        <TabsList>
+          <TabsTrigger value="records" className="gap-2"><FileText className="w-3.5 h-3.5" />All Records</TabsTrigger>
+          <TabsTrigger value="members" className="gap-2"><User className="w-3.5 h-3.5" />By Member</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="records">
+          <Card className="glass border-none shadow-sm">
+            <CardHeader className="pb-3">
+              <div className="flex flex-col sm:flex-row gap-3">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input placeholder="Search by member name…" className="pl-9" value={search} onChange={e => setSearch(e.target.value)} />
+                </div>
+                <Select value={typeFilter} onValueChange={setTypeFilter}>
+                  <SelectTrigger className="w-full sm:w-[160px]"><SelectValue placeholder="All Types" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Types</SelectItem>
+                    <SelectItem value="Tithe">Tithe</SelectItem>
+                    <SelectItem value="Offering">Offering</SelectItem>
+                    <SelectItem value="Seed">Seed</SelectItem>
+                    <SelectItem value="Project">Project</SelectItem>
+                    <SelectItem value="Other">Other</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </CardHeader>
+            <CardContent className="p-0">
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="border-border/40">
+                      <TableHead className="pl-6">Date</TableHead>
+                      <TableHead>Member</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead className="hidden sm:table-cell">Method</TableHead>
+                      <TableHead className="text-right">Amount</TableHead>
+                      <TableHead className="text-right pr-6">Actions</TableHead>
                     </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
+                  </TableHeader>
+                  <TableBody>
+                    {filtered.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={6} className="py-16 text-center text-muted-foreground">No records found.</TableCell>
+                      </TableRow>
+                    )}
+                    {filtered.map(record => {
+                      const member = members.find(m => m.id === record.memberId);
+                      return (
+                        <TableRow key={record.id} className="hover:bg-muted/20 border-border/30 transition-colors">
+                          <TableCell className="pl-6 font-medium text-sm">{format(parseISO(record.date), 'MMM d, yyyy')}</TableCell>
+                          <TableCell className="text-sm">
+                            {member ? `${member.firstName} ${member.lastName}` : <span className="text-muted-foreground italic">Anonymous</span>}
+                          </TableCell>
+                          <TableCell>
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold border ${TYPE_COLORS[record.type] ?? TYPE_COLORS.Other}`}>
+                              {record.type}
+                            </span>
+                          </TableCell>
+                          <TableCell className="hidden sm:table-cell text-sm text-muted-foreground">{record.paymentMethod}</TableCell>
+                          <TableCell className="text-right font-bold text-gold-600 dark:text-gold-400">₵{record.amount.toLocaleString()}</TableCell>
+                          <TableCell className="text-right pr-6">
+                            <div className="flex items-center justify-end gap-1">
+                              <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground" title="Download receipt" onClick={() => generateReceipt(record)}>
+                                <FileText className="w-3.5 h-3.5" />
+                              </Button>
+                              <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => handleDelete(record)}>
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="members" className="space-y-4">
+          <Card className="glass border-none shadow-sm">
+            <CardHeader className="pb-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <CardTitle className="text-base">Giving by Member</CardTitle>
+                  <CardDescription className="text-xs mt-0.5">Click a row to see full breakdown and download a period receipt.</CardDescription>
+                </div>
+                <Input type="month" className="w-44" value={memberGivingMonth} onChange={e => setMemberGivingMonth(e.target.value)} />
+              </div>
+            </CardHeader>
+            <CardContent className="p-0">
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="border-border/40">
+                      <TableHead className="pl-6">Member</TableHead>
+                      <TableHead className="text-right">Tithe</TableHead>
+                      <TableHead className="text-right">Offering</TableHead>
+                      <TableHead className="text-right hidden sm:table-cell">Other</TableHead>
+                      <TableHead className="text-right">Total</TableHead>
+                      <TableHead className="text-right pr-6">Receipt</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {memberGivingSummary.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={6} className="py-16 text-center text-muted-foreground">No giving records for this period.</TableCell>
+                      </TableRow>
+                    )}
+                    {memberGivingSummary.map(entry => {
+                      const mem = entry.memberId !== '__anonymous__' ? members.find(m => m.id === entry.memberId) : null;
+                      const name = mem ? `${mem.firstName} ${mem.lastName}` : 'Anonymous';
+                      return (
+                        <TableRow key={entry.memberId} className="hover:bg-muted/20 border-border/30 transition-colors cursor-pointer"
+                          onClick={() => { setSelectedMemberGiving({ member: mem ?? null, memberId: entry.memberId, records: entry.records }); setMemberDetailOpen(true); }}>
+                          <TableCell className="pl-6">
+                            <div className="flex items-center gap-2">
+                              <div className="w-7 h-7 rounded-full bg-navy-900/10 dark:bg-navy-100/10 flex items-center justify-center shrink-0">
+                                <User className="w-3.5 h-3.5 text-navy-700 dark:text-navy-300" />
+                              </div>
+                              <span className="font-medium text-sm">{name}</span>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right text-sm">₵{entry.tithe.toLocaleString()}</TableCell>
+                          <TableCell className="text-right text-sm">₵{entry.offering.toLocaleString()}</TableCell>
+                          <TableCell className="text-right text-sm hidden sm:table-cell">₵{entry.other.toLocaleString()}</TableCell>
+                          <TableCell className="text-right font-bold text-gold-600 dark:text-gold-400">₵{entry.total.toLocaleString()}</TableCell>
+                          <TableCell className="text-right pr-6">
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                              title="Download period receipt"
+                              onClick={e => { e.stopPropagation(); generatePeriodReceipt(entry.memberId, entry.records); }}>
+                              <Download className="w-3.5 h-3.5" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Member Detail Dialog */}
+          <Dialog open={memberDetailOpen} onOpenChange={setMemberDetailOpen}>
+            <DialogContent className="max-w-lg">
+              <DialogHeader>
+                <DialogTitle className="font-display text-xl">
+                  {selectedMemberGiving?.member
+                    ? `${selectedMemberGiving.member.firstName} ${selectedMemberGiving.member.lastName}`
+                    : 'Anonymous'} — Giving Detail
+                </DialogTitle>
+              </DialogHeader>
+              {selectedMemberGiving && (
+                <div className="space-y-3">
+                  <p className="text-sm text-muted-foreground">
+                    {format(parseISO(memberGivingMonth + '-01'), 'MMMM yyyy')}
+                  </p>
+                  <div className="overflow-y-auto max-h-72">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Date</TableHead>
+                          <TableHead>Type</TableHead>
+                          <TableHead className="hidden sm:table-cell">Method</TableHead>
+                          <TableHead className="text-right">Amount</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {[...selectedMemberGiving.records]
+                          .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+                          .map(r => (
+                            <TableRow key={r.id}>
+                              <TableCell className="text-sm">{format(parseISO(r.date), 'MMM d')}</TableCell>
+                              <TableCell>
+                                <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold border ${TYPE_COLORS[r.type] ?? TYPE_COLORS.Other}`}>
+                                  {r.type}
+                                </span>
+                              </TableCell>
+                              <TableCell className="hidden sm:table-cell text-sm text-muted-foreground">{r.paymentMethod}</TableCell>
+                              <TableCell className="text-right font-bold text-gold-600 dark:text-gold-400">₵{r.amount.toLocaleString()}</TableCell>
+                            </TableRow>
+                          ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                  <div className="flex items-center justify-between pt-3 border-t border-border/40">
+                    <span className="font-bold text-sm">
+                      Total: ₵{selectedMemberGiving.records.reduce((s, r) => s + r.amount, 0).toLocaleString()}
+                    </span>
+                    <Button size="sm" variant="outline" className="gap-2"
+                      onClick={() => generatePeriodReceipt(selectedMemberGiving.memberId, selectedMemberGiving.records)}>
+                      <Download className="w-3.5 h-3.5" /> Download Receipt
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </DialogContent>
+          </Dialog>
+        </TabsContent>
+      </Tabs>
 
       {/* Log Giving Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>

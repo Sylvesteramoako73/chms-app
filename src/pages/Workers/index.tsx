@@ -2,9 +2,8 @@ import { useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { format } from 'date-fns';
 import { useWorkers } from '@/hooks/useWorkers';
-import { useData } from '@/context/DataContext';
 import { useRole } from '@/context/RoleContext';
-import type { Worker, WorkerSchedule } from '@/types';
+import type { Worker, WorkerSchedule, EmploymentType } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,15 +13,15 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import {
-  Plus, Search, UserCheck, Users, Building2, CalendarCheck,
+  Plus, Search, UserCheck, Users, CalendarCheck, Briefcase,
   Pencil, Trash2, X, LayoutGrid, List, Clock, CheckCircle2,
-  AlertCircle, ChevronDown,
+  AlertCircle,
 } from 'lucide-react';
 import { cn } from '@/utils';
 
 const WORKER_STATUSES = ['Active', 'Inactive', 'Suspended', 'On Leave'] as const;
+const EMPLOYMENT_TYPES: EmploymentType[] = ['Full-time', 'Part-time', 'Contract'];
 const SERVICE_TYPES = ['Sunday First Service', 'Sunday Second Service', 'Midweek', 'Prayer Meeting', 'Special Program'];
-const ROLE_TITLES = ['Head of Department', 'Deputy Head', 'Secretary', 'Assistant', 'Member'];
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
 const STATUS_STYLES: Record<string, string> = {
@@ -32,73 +31,83 @@ const STATUS_STYLES: Record<string, string> = {
   'On Leave': 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-200',
 };
 
+const EMP_STYLES: Record<EmploymentType, string> = {
+  'Full-time': 'bg-gold-500/10 text-gold-700 dark:text-gold-400 border-gold-200',
+  'Part-time': 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-200',
+  'Contract': 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-200',
+};
+
 const EMPTY_WORKER: Omit<Worker, 'id' | 'createdAt'> = {
   firstName: '', lastName: '', phone: '', email: '',
-  departmentId: '', roleTitle: 'Member', serviceUnit: '',
-  status: 'Active', joinDate: format(new Date(), 'yyyy-MM-dd'), notes: '',
+  jobTitle: '', employmentType: 'Full-time',
+  status: 'Active', startDate: format(new Date(), 'yyyy-MM-dd'), notes: '',
 };
 
 export default function Workers() {
   const { workers, workerAttendance, workerSchedules, loading, addWorker, updateWorker, deleteWorker, logWorkerAttendance, addWorkerSchedule, updateWorkerSchedule, deleteWorkerSchedule } = useWorkers();
-  const { departments } = useData();
   const { actions } = useRole();
   const { toast } = useToast();
 
   const [search, setSearch] = useState('');
-  const [deptFilter, setDeptFilter] = useState('all');
+  const [empFilter, setEmpFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [view, setView] = useState<'grid' | 'list'>('grid');
   const [workerDialog, setWorkerDialog] = useState(false);
   const [editing, setEditing] = useState<Worker | null>(null);
   const [form, setForm] = useState({ ...EMPTY_WORKER });
   const [scheduleDialog, setScheduleDialog] = useState(false);
-  const [scheduleForm, setScheduleForm] = useState({ workerId: '', date: '', startTime: '08:00', endTime: '12:00', duty: '', departmentId: '', notes: '' });
+  const [scheduleForm, setScheduleForm] = useState({ workerId: '', date: '', startTime: '08:00', endTime: '12:00', duty: '', notes: '' });
   const [editingSchedule, setEditingSchedule] = useState<WorkerSchedule | null>(null);
   const [attDate, setAttDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [attService, setAttService] = useState(SERVICE_TYPES[0]);
   const [presentIds, setPresentIds] = useState<Set<string>>(new Set());
-  const [expandedDept, setExpandedDept] = useState<string | null>(null);
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
     return workers.filter(w => {
-      if (deptFilter !== 'all' && w.departmentId !== deptFilter) return false;
+      if (empFilter !== 'all' && w.employmentType !== empFilter) return false;
       if (statusFilter !== 'all' && w.status !== statusFilter) return false;
-      return `${w.firstName} ${w.lastName}`.toLowerCase().includes(q) || w.phone.includes(q) || w.roleTitle.toLowerCase().includes(q);
+      return `${w.firstName} ${w.lastName}`.toLowerCase().includes(q) ||
+        w.phone.includes(q) || w.jobTitle.toLowerCase().includes(q);
     });
-  }, [workers, search, deptFilter, statusFilter]);
+  }, [workers, search, empFilter, statusFilter]);
 
   const activeCount = workers.filter(w => w.status === 'Active').length;
+  const fullTimeCount = workers.filter(w => w.employmentType === 'Full-time').length;
 
-  const openAdd = () => {
-    setEditing(null);
-    setForm({ ...EMPTY_WORKER });
-    setWorkerDialog(true);
-  };
+  const roleGroups = useMemo(() => {
+    const map = new Map<string, Worker[]>();
+    for (const w of workers) {
+      const key = w.jobTitle || 'Unspecified';
+      map.set(key, [...(map.get(key) ?? []), w]);
+    }
+    return Array.from(map.entries()).sort((a, b) => b[1].length - a[1].length);
+  }, [workers]);
 
+  const openAdd = () => { setEditing(null); setForm({ ...EMPTY_WORKER }); setWorkerDialog(true); };
   const openEdit = (w: Worker) => {
     setEditing(w);
-    setForm({ firstName: w.firstName, lastName: w.lastName, phone: w.phone, email: w.email ?? '', departmentId: w.departmentId, roleTitle: w.roleTitle, serviceUnit: w.serviceUnit ?? '', status: w.status, joinDate: w.joinDate, notes: w.notes ?? '' });
+    setForm({ firstName: w.firstName, lastName: w.lastName, phone: w.phone, email: w.email ?? '', jobTitle: w.jobTitle, employmentType: w.employmentType, status: w.status, startDate: w.startDate, notes: w.notes ?? '' });
     setWorkerDialog(true);
   };
 
   const handleSave = () => {
     if (!form.firstName.trim()) { toast({ title: 'First name is required', variant: 'destructive' }); return; }
     if (!form.phone.trim()) { toast({ title: 'Phone number is required', variant: 'destructive' }); return; }
-    if (!form.departmentId) { toast({ title: 'Please select a department', variant: 'destructive' }); return; }
+    if (!form.jobTitle.trim()) { toast({ title: 'Job title is required', variant: 'destructive' }); return; }
     if (editing) {
       updateWorker({ ...editing, ...form });
-      toast({ title: 'Worker updated' });
+      toast({ title: 'Staff record updated' });
     } else {
       addWorker({ id: `wk${Date.now()}`, ...form, createdAt: new Date().toISOString() });
-      toast({ title: 'Worker registered', description: `${form.firstName} ${form.lastName} has been added.` });
+      toast({ title: 'Staff member added', description: `${form.firstName} ${form.lastName} has been registered.` });
     }
     setWorkerDialog(false);
   };
 
   const handleDelete = (w: Worker) => {
     deleteWorker(w.id);
-    toast({ title: 'Worker removed', description: `${w.firstName} ${w.lastName} has been removed.` });
+    toast({ title: 'Staff member removed', description: `${w.firstName} ${w.lastName} has been removed.` });
   };
 
   const handleSaveSchedule = () => {
@@ -123,19 +132,19 @@ export default function Workers() {
       present: presentIds.has(w.id),
     }));
     logWorkerAttendance(records);
-    toast({ title: 'Attendance logged', description: `${presentIds.size} workers marked present.` });
+    toast({ title: 'Attendance logged', description: `${presentIds.size} staff marked present.` });
     setPresentIds(new Set());
   };
 
   const openScheduleAdd = () => {
     setEditingSchedule(null);
-    setScheduleForm({ workerId: '', date: '', startTime: '08:00', endTime: '12:00', duty: '', departmentId: '', notes: '' });
+    setScheduleForm({ workerId: '', date: '', startTime: '08:00', endTime: '12:00', duty: '', notes: '' });
     setScheduleDialog(true);
   };
 
   const openScheduleEdit = (s: WorkerSchedule) => {
     setEditingSchedule(s);
-    setScheduleForm({ workerId: s.workerId, date: s.date, startTime: s.startTime, endTime: s.endTime, duty: s.duty, departmentId: s.departmentId, notes: s.notes ?? '' });
+    setScheduleForm({ workerId: s.workerId, date: s.date, startTime: s.startTime, endTime: s.endTime, duty: s.duty, notes: s.notes ?? '' });
     setScheduleDialog(true);
   };
 
@@ -150,12 +159,12 @@ export default function Workers() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-4xl font-display font-bold text-navy-900 dark:text-cream mb-1">Workers</h1>
-          <p className="text-sm text-muted-foreground">Manage church workers, duties, and attendance</p>
+          <h1 className="text-4xl font-display font-bold text-navy-900 dark:text-cream mb-1">Church Staff</h1>
+          <p className="text-sm text-muted-foreground">Manage paid staff, duties, and attendance</p>
         </div>
         {actions.canManageWorkers && (
           <Button size="sm" onClick={openAdd} className="gap-2 bg-white hover:bg-gray-50 text-navy-900 font-medium shrink-0">
-            <Plus className="w-4 h-4" /> Register Worker
+            <Plus className="w-4 h-4" /> Add Staff
           </Button>
         )}
       </div>
@@ -163,14 +172,14 @@ export default function Workers() {
       {/* KPI Row */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {[
-          { label: 'Total Workers', value: workers.length, icon: Users, color: 'text-navy-500 dark:text-navy-300' },
+          { label: 'Total Staff', value: workers.length, icon: Users, color: 'text-navy-500 dark:text-navy-300' },
           { label: 'Active', value: activeCount, icon: UserCheck, color: 'text-sage-500' },
-          { label: 'Departments', value: departments.length, icon: Building2, color: 'text-gold-500' },
+          { label: 'Full-time', value: fullTimeCount, icon: Briefcase, color: 'text-gold-500' },
           { label: 'On Duty Today', value: workerSchedules.filter(s => s.date === format(new Date(), 'yyyy-MM-dd')).length, icon: CalendarCheck, color: 'text-blue-500' },
         ].map(stat => (
           <Card key={stat.label} className="glass border-none shadow-sm">
             <CardContent className="p-4 flex items-center gap-3">
-              <div className={cn('w-9 h-9 rounded-lg flex items-center justify-center', 'bg-muted/50')}>
+              <div className="w-9 h-9 rounded-lg bg-muted/50 flex items-center justify-center">
                 <stat.icon className={cn('w-5 h-5', stat.color)} />
               </div>
               <div>
@@ -182,28 +191,27 @@ export default function Workers() {
         ))}
       </div>
 
-      <Tabs defaultValue="workers">
+      <Tabs defaultValue="staff">
         <TabsList className="glass border-none">
-          <TabsTrigger value="workers">All Workers</TabsTrigger>
-          <TabsTrigger value="departments">Departments</TabsTrigger>
+          <TabsTrigger value="staff">All Staff</TabsTrigger>
+          <TabsTrigger value="roles">By Role</TabsTrigger>
           <TabsTrigger value="attendance">Attendance</TabsTrigger>
           <TabsTrigger value="schedule">Schedule</TabsTrigger>
         </TabsList>
 
-        {/* ── Workers Tab ── */}
-        <TabsContent value="workers" className="space-y-4 mt-4">
-          {/* Filters */}
+        {/* ── All Staff Tab ── */}
+        <TabsContent value="staff" className="space-y-4 mt-4">
           <Card className="glass border-none shadow-sm">
             <CardContent className="p-3 flex flex-wrap gap-2 items-center">
               <div className="relative flex-1 min-w-[180px]">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-                <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search workers…" className="pl-8 h-8 text-sm" />
+                <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by name or job title…" className="pl-8 h-8 text-sm" />
               </div>
-              <Select value={deptFilter} onValueChange={setDeptFilter}>
-                <SelectTrigger className="h-8 text-sm w-[150px]"><SelectValue placeholder="Department" /></SelectTrigger>
+              <Select value={empFilter} onValueChange={setEmpFilter}>
+                <SelectTrigger className="h-8 text-sm w-[150px]"><SelectValue placeholder="Employment" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Departments</SelectItem>
-                  {departments.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
+                  <SelectItem value="all">All Types</SelectItem>
+                  {EMPLOYMENT_TYPES.map(e => <SelectItem key={e} value={e}>{e}</SelectItem>)}
                 </SelectContent>
               </Select>
               <Select value={statusFilter} onValueChange={setStatusFilter}>
@@ -223,132 +231,123 @@ export default function Workers() {
           {filtered.length === 0 ? (
             <div className="glass rounded-xl border border-dashed border-border p-16 text-center">
               <UserCheck className="w-10 h-10 text-muted-foreground mx-auto mb-3 opacity-40" />
-              <p className="text-muted-foreground text-sm">{search ? 'No workers match your search.' : 'No workers registered yet.'}</p>
-              {actions.canManageWorkers && <Button size="sm" variant="outline" onClick={openAdd} className="mt-4 gap-1"><Plus className="w-3.5 h-3.5" /> Add First Worker</Button>}
+              <p className="text-muted-foreground text-sm">{search ? 'No staff match your search.' : 'No staff registered yet.'}</p>
+              {actions.canManageWorkers && <Button size="sm" variant="outline" onClick={openAdd} className="mt-4 gap-1"><Plus className="w-3.5 h-3.5" /> Add First Staff Member</Button>}
             </div>
           ) : view === 'grid' ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filtered.map(w => {
-                const dept = departments.find(d => d.id === w.departmentId);
-                const initials = `${w.firstName[0] ?? ''}${w.lastName[0] ?? ''}`.toUpperCase();
-                return (
-                  <Card key={w.id} className="glass border-none shadow-sm hover:shadow-md transition-shadow">
-                    <CardContent className="p-4">
-                      <div className="flex items-start gap-3">
-                        <div className="w-10 h-10 rounded-full bg-navy-700 flex items-center justify-center text-white font-bold text-sm shrink-0 border border-navy-600">
-                          {initials}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="font-semibold text-sm truncate">{w.firstName} {w.lastName}</p>
-                          <p className="text-xs text-muted-foreground truncate">{w.roleTitle}</p>
-                          {dept && <p className="text-xs text-gold-600 dark:text-gold-400 font-medium truncate">{dept.name}</p>}
-                        </div>
-                        <span className={cn('inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border shrink-0', STATUS_STYLES[w.status])}>
-                          {w.status}
-                        </span>
+              {filtered.map(w => (
+                <Card key={w.id} className="glass border-none shadow-sm hover:shadow-md transition-shadow">
+                  <CardContent className="p-4">
+                    <div className="flex items-start gap-3">
+                      <div className="w-10 h-10 rounded-full bg-navy-700 flex items-center justify-center text-white font-bold text-sm shrink-0 border border-navy-600">
+                        {`${w.firstName[0] ?? ''}${w.lastName[0] ?? ''}`.toUpperCase()}
                       </div>
-                      <div className="mt-3 pt-3 border-t border-border/50 flex items-center justify-between">
-                        <span className="text-xs text-muted-foreground">{w.phone}</span>
-                        {actions.canManageWorkers && (
-                          <div className="flex gap-1">
-                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(w)}><Pencil className="w-3 h-3" /></Button>
-                            <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => handleDelete(w)}><Trash2 className="w-3 h-3" /></Button>
-                          </div>
-                        )}
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-sm truncate">{w.firstName} {w.lastName}</p>
+                        <p className="text-xs text-gold-600 dark:text-gold-400 font-medium truncate">{w.jobTitle || '—'}</p>
                       </div>
-                    </CardContent>
-                  </Card>
-                );
-              })}
+                      <span className={cn('inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border shrink-0', STATUS_STYLES[w.status])}>
+                        {w.status}
+                      </span>
+                    </div>
+                    <div className="mt-3 flex items-center gap-2">
+                      <span className={cn('inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border', EMP_STYLES[w.employmentType])}>
+                        {w.employmentType}
+                      </span>
+                      <span className="text-xs text-muted-foreground ml-auto">{w.phone}</span>
+                    </div>
+                    {actions.canManageWorkers && (
+                      <div className="mt-2 pt-2 border-t border-border/50 flex justify-end gap-1">
+                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(w)}><Pencil className="w-3 h-3" /></Button>
+                        <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => handleDelete(w)}><Trash2 className="w-3 h-3" /></Button>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              ))}
             </div>
           ) : (
             <Card className="glass border-none shadow-sm">
               <div className="divide-y divide-border/50">
-                {filtered.map(w => {
-                  const dept = departments.find(d => d.id === w.departmentId);
-                  return (
-                    <div key={w.id} className="flex items-center gap-4 px-4 py-3">
-                      <div className="w-8 h-8 rounded-full bg-navy-700 flex items-center justify-center text-white font-bold text-xs shrink-0">
-                        {`${w.firstName[0] ?? ''}${w.lastName[0] ?? ''}`.toUpperCase()}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-sm">{w.firstName} {w.lastName}</p>
-                        <p className="text-xs text-muted-foreground">{w.roleTitle} · {dept?.name ?? '—'}</p>
-                      </div>
-                      <span className={cn('hidden sm:inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border', STATUS_STYLES[w.status])}>
-                        {w.status}
-                      </span>
-                      <span className="text-xs text-muted-foreground hidden md:block">{w.phone}</span>
-                      {actions.canManageWorkers && (
-                        <div className="flex gap-1">
-                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(w)}><Pencil className="w-3 h-3" /></Button>
-                          <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => handleDelete(w)}><Trash2 className="w-3 h-3" /></Button>
-                        </div>
-                      )}
+                {filtered.map(w => (
+                  <div key={w.id} className="flex items-center gap-4 px-4 py-3">
+                    <div className="w-8 h-8 rounded-full bg-navy-700 flex items-center justify-center text-white font-bold text-xs shrink-0">
+                      {`${w.firstName[0] ?? ''}${w.lastName[0] ?? ''}`.toUpperCase()}
                     </div>
-                  );
-                })}
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-sm">{w.firstName} {w.lastName}</p>
+                      <p className="text-xs text-muted-foreground">{w.jobTitle || '—'} · {w.employmentType}</p>
+                    </div>
+                    <span className={cn('hidden sm:inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border', STATUS_STYLES[w.status])}>
+                      {w.status}
+                    </span>
+                    <span className="text-xs text-muted-foreground hidden md:block">{w.phone}</span>
+                    {actions.canManageWorkers && (
+                      <div className="flex gap-1">
+                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(w)}><Pencil className="w-3 h-3" /></Button>
+                        <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:bg-destructive/10" onClick={() => handleDelete(w)}><Trash2 className="w-3 h-3" /></Button>
+                      </div>
+                    )}
+                  </div>
+                ))}
               </div>
             </Card>
           )}
         </TabsContent>
 
-        {/* ── Departments Tab ── */}
-        <TabsContent value="departments" className="space-y-4 mt-4">
-          {departments.length === 0 ? (
-            <div className="glass rounded-xl border border-dashed border-border p-16 text-center text-muted-foreground text-sm">No departments found. Create departments first.</div>
+        {/* ── By Role Tab ── */}
+        <TabsContent value="roles" className="space-y-4 mt-4">
+          {roleGroups.length === 0 ? (
+            <div className="glass rounded-xl border border-dashed border-border p-16 text-center text-muted-foreground text-sm">No staff registered yet.</div>
           ) : (
             <div className="grid gap-4">
-              {departments.map(dept => {
-                const deptWorkers = workers.filter(w => w.departmentId === dept.id);
-                const active = deptWorkers.filter(w => w.status === 'Active').length;
-                const isExpanded = expandedDept === dept.id;
-                return (
-                  <Card key={dept.id} className="glass border-none shadow-sm">
-                    <CardHeader className="pb-0 cursor-pointer" onClick={() => setExpandedDept(isExpanded ? null : dept.id)}>
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <div className="w-9 h-9 rounded-lg bg-gold-500/10 flex items-center justify-center">
-                            <Building2 className="w-4 h-4 text-gold-600 dark:text-gold-400" />
-                          </div>
-                          <div>
-                            <CardTitle className="text-base font-semibold">{dept.name}</CardTitle>
-                            <p className="text-xs text-muted-foreground mt-0.5">{deptWorkers.length} workers · {active} active</p>
-                          </div>
+              {roleGroups.map(([role, group]) => (
+                <Card key={role} className="glass border-none shadow-sm">
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-lg bg-gold-500/10 flex items-center justify-center">
+                          <Briefcase className="w-4 h-4 text-gold-600 dark:text-gold-400" />
                         </div>
-                        <div className="flex items-center gap-2">
-                          <div className="h-2 w-24 bg-muted rounded-full overflow-hidden hidden sm:block">
-                            <div className="h-full bg-sage-500 rounded-full" style={{ width: deptWorkers.length ? `${(active / deptWorkers.length) * 100}%` : '0%' }} />
-                          </div>
-                          <ChevronDown className={cn('w-4 h-4 text-muted-foreground transition-transform', isExpanded && 'rotate-180')} />
+                        <div>
+                          <CardTitle className="text-base font-semibold">{role}</CardTitle>
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            {group.length} staff · {group.filter(w => w.status === 'Active').length} active
+                          </p>
                         </div>
                       </div>
-                    </CardHeader>
-                    {isExpanded && (
-                      <CardContent className="pt-3 pb-4">
-                        {deptWorkers.length === 0 ? (
-                          <p className="text-sm text-muted-foreground text-center py-4">No workers in this department.</p>
-                        ) : (
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
-                            {deptWorkers.map(w => (
-                              <div key={w.id} className="flex items-center gap-2 p-2 rounded-lg bg-muted/30">
-                                <div className="w-7 h-7 rounded-full bg-navy-700 flex items-center justify-center text-white text-xs font-bold shrink-0">
-                                  {`${w.firstName[0] ?? ''}${w.lastName[0] ?? ''}`.toUpperCase()}
-                                </div>
-                                <div className="min-w-0 flex-1">
-                                  <p className="text-xs font-medium truncate">{w.firstName} {w.lastName}</p>
-                                  <p className="text-[10px] text-muted-foreground truncate">{w.roleTitle}</p>
-                                </div>
-                                <span className={cn('text-[10px] font-semibold px-1.5 py-0.5 rounded-full border', STATUS_STYLES[w.status])}>{w.status}</span>
-                              </div>
-                            ))}
+                      <div className="flex gap-1">
+                        {EMPLOYMENT_TYPES.map(et => {
+                          const count = group.filter(w => w.employmentType === et).length;
+                          if (!count) return null;
+                          return (
+                            <span key={et} className={cn('text-[10px] font-semibold px-2 py-0.5 rounded-full border', EMP_STYLES[et])}>
+                              {count} {et}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="pt-0">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {group.map(w => (
+                        <div key={w.id} className="flex items-center gap-2 p-2 rounded-lg bg-muted/30">
+                          <div className="w-7 h-7 rounded-full bg-navy-700 flex items-center justify-center text-white text-xs font-bold shrink-0">
+                            {`${w.firstName[0] ?? ''}${w.lastName[0] ?? ''}`.toUpperCase()}
                           </div>
-                        )}
-                      </CardContent>
-                    )}
-                  </Card>
-                );
-              })}
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs font-medium truncate">{w.firstName} {w.lastName}</p>
+                            <p className="text-[10px] text-muted-foreground">{w.phone}</p>
+                          </div>
+                          <span className={cn('text-[10px] font-semibold px-1.5 py-0.5 rounded-full border', STATUS_STYLES[w.status])}>{w.status}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
             </div>
           )}
         </TabsContent>
@@ -375,20 +374,19 @@ export default function Workers() {
           </Card>
 
           <div className="flex items-center justify-between px-1">
-            <p className="text-sm text-muted-foreground">{presentIds.size} of {workers.filter(w => w.status === 'Active').length} active workers marked present</p>
+            <p className="text-sm text-muted-foreground">{presentIds.size} of {workers.filter(w => w.status === 'Active').length} active staff marked present</p>
             <div className="flex gap-2">
-              <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setPresentIds(new Set(workers.filter(w => w.status === 'Active').map(w => w.id)))}>Mark All Present</Button>
-              <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setPresentIds(new Set())}>Clear All</Button>
+              <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setPresentIds(new Set(workers.filter(w => w.status === 'Active').map(w => w.id)))}>Mark All</Button>
+              <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setPresentIds(new Set())}>Clear</Button>
             </div>
           </div>
 
           {workers.filter(w => w.status !== 'Inactive').length === 0 ? (
-            <div className="glass rounded-xl border border-dashed border-border p-12 text-center text-muted-foreground text-sm">No active workers to mark attendance for.</div>
+            <div className="glass rounded-xl border border-dashed border-border p-12 text-center text-muted-foreground text-sm">No active staff to mark attendance for.</div>
           ) : (
             <Card className="glass border-none shadow-sm">
               <div className="divide-y divide-border/50">
                 {workers.filter(w => w.status !== 'Inactive').map(w => {
-                  const dept = departments.find(d => d.id === w.departmentId);
                   const isPresent = presentIds.has(w.id);
                   return (
                     <label key={w.id} className="flex items-center gap-4 px-4 py-3 cursor-pointer hover:bg-muted/30 transition-colors">
@@ -407,13 +405,9 @@ export default function Workers() {
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium">{w.firstName} {w.lastName}</p>
-                        <p className="text-xs text-muted-foreground">{dept?.name} · {w.roleTitle}</p>
+                        <p className="text-xs text-muted-foreground">{w.jobTitle} · {w.employmentType}</p>
                       </div>
-                      {isPresent ? (
-                        <CheckCircle2 className="w-4 h-4 text-sage-500 shrink-0" />
-                      ) : (
-                        <AlertCircle className="w-4 h-4 text-muted-foreground/40 shrink-0" />
-                      )}
+                      {isPresent ? <CheckCircle2 className="w-4 h-4 text-sage-500 shrink-0" /> : <AlertCircle className="w-4 h-4 text-muted-foreground/40 shrink-0" />}
                     </label>
                   );
                 })}
@@ -421,7 +415,6 @@ export default function Workers() {
             </Card>
           )}
 
-          {/* Attendance History */}
           {workerAttendance.length > 0 && (
             <div>
               <h3 className="text-sm font-semibold mb-2 text-muted-foreground uppercase tracking-wide">Recent Attendance Logs</h3>
@@ -452,7 +445,7 @@ export default function Workers() {
             <p className="text-sm text-muted-foreground">{workerSchedules.length} scheduled duties</p>
             {actions.canManageWorkers && (
               <Button size="sm" onClick={openScheduleAdd} className="gap-1.5 h-8 bg-white hover:bg-gray-50 text-navy-900 font-medium">
-                <Plus className="w-3.5 h-3.5" /> Add Duty
+                <Plus className="w-3.5 h-3.5" /> Schedule Duty
               </Button>
             )}
           </div>
@@ -475,7 +468,6 @@ export default function Workers() {
                     <div className="space-y-2">
                       {daySchedules.map(s => {
                         const worker = workers.find(w => w.id === s.workerId);
-                        const dept = departments.find(d => d.id === s.departmentId);
                         return (
                           <Card key={s.id} className="glass border-none shadow-sm">
                             <CardContent className="p-3 flex items-center gap-3">
@@ -483,8 +475,8 @@ export default function Workers() {
                                 {worker ? `${worker.firstName[0]}${worker.lastName[0]}`.toUpperCase() : '?'}
                               </div>
                               <div className="flex-1 min-w-0">
-                                <p className="text-sm font-medium truncate">{worker ? `${worker.firstName} ${worker.lastName}` : 'Unknown Worker'}</p>
-                                <p className="text-xs text-muted-foreground">{s.duty} · {s.startTime}–{s.endTime}{dept ? ` · ${dept.name}` : ''}</p>
+                                <p className="text-sm font-medium truncate">{worker ? `${worker.firstName} ${worker.lastName}` : 'Unknown'}</p>
+                                <p className="text-xs text-muted-foreground">{s.duty} · {s.startTime}–{s.endTime}</p>
                               </div>
                               <span className={cn('text-[10px] font-semibold px-2 py-0.5 rounded-full border',
                                 s.status === 'Confirmed' ? 'bg-sage-500/10 text-sage-700 dark:text-sage-400 border-sage-200' :
@@ -510,11 +502,11 @@ export default function Workers() {
         </TabsContent>
       </Tabs>
 
-      {/* Add/Edit Worker Dialog */}
+      {/* Add/Edit Staff Dialog */}
       <Dialog open={workerDialog} onOpenChange={setWorkerDialog}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle className="font-display text-2xl">{editing ? 'Edit Worker' : 'Register Worker'}</DialogTitle>
+            <DialogTitle className="font-display text-2xl">{editing ? 'Edit Staff Member' : 'Add Staff Member'}</DialogTitle>
           </DialogHeader>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-2">
             <div className="space-y-1.5">
@@ -531,25 +523,18 @@ export default function Workers() {
             </div>
             <div className="space-y-1.5">
               <Label>Email</Label>
-              <Input type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} placeholder="worker@email.com" />
+              <Input type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} placeholder="staff@church.com" />
+            </div>
+            <div className="space-y-1.5 sm:col-span-2">
+              <Label>Job Title *</Label>
+              <Input value={form.jobTitle} onChange={e => setForm(f => ({ ...f, jobTitle: e.target.value }))} placeholder="e.g. Accountant, Secretary, Janitor, Security" />
             </div>
             <div className="space-y-1.5">
-              <Label>Department *</Label>
-              <Select value={form.departmentId} onValueChange={v => setForm(f => ({ ...f, departmentId: v }))}>
-                <SelectTrigger><SelectValue placeholder="Select department…" /></SelectTrigger>
-                <SelectContent>{departments.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}</SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label>Role / Title</Label>
-              <Select value={form.roleTitle} onValueChange={v => setForm(f => ({ ...f, roleTitle: v }))}>
+              <Label>Employment Type</Label>
+              <Select value={form.employmentType} onValueChange={v => setForm(f => ({ ...f, employmentType: v as EmploymentType }))}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>{ROLE_TITLES.map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}</SelectContent>
+                <SelectContent>{EMPLOYMENT_TYPES.map(e => <SelectItem key={e} value={e}>{e}</SelectItem>)}</SelectContent>
               </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label>Service Unit</Label>
-              <Input value={form.serviceUnit} onChange={e => setForm(f => ({ ...f, serviceUnit: e.target.value }))} placeholder="e.g. Morning Service" />
             </div>
             <div className="space-y-1.5">
               <Label>Status</Label>
@@ -559,8 +544,8 @@ export default function Workers() {
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label>Join Date</Label>
-              <Input type="date" value={form.joinDate} onChange={e => setForm(f => ({ ...f, joinDate: e.target.value }))} />
+              <Label>Start Date</Label>
+              <Input type="date" value={form.startDate} onChange={e => setForm(f => ({ ...f, startDate: e.target.value }))} />
             </div>
             <div className="space-y-1.5 sm:col-span-2">
               <Label>Notes</Label>
@@ -569,7 +554,7 @@ export default function Workers() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setWorkerDialog(false)}>Cancel</Button>
-            <Button onClick={handleSave} className="bg-white hover:bg-gray-50 text-navy-900 font-medium">{editing ? 'Save Changes' : 'Register'}</Button>
+            <Button onClick={handleSave} className="bg-white hover:bg-gray-50 text-navy-900 font-medium">{editing ? 'Save Changes' : 'Add Staff'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -582,10 +567,10 @@ export default function Workers() {
           </DialogHeader>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-2">
             <div className="space-y-1.5 sm:col-span-2">
-              <Label>Worker *</Label>
+              <Label>Staff Member *</Label>
               <Select value={scheduleForm.workerId} onValueChange={v => setScheduleForm(f => ({ ...f, workerId: v }))}>
-                <SelectTrigger><SelectValue placeholder="Select worker…" /></SelectTrigger>
-                <SelectContent>{workers.map(w => <SelectItem key={w.id} value={w.id}>{w.firstName} {w.lastName}</SelectItem>)}</SelectContent>
+                <SelectTrigger><SelectValue placeholder="Select staff member…" /></SelectTrigger>
+                <SelectContent>{workers.map(w => <SelectItem key={w.id} value={w.id}>{w.firstName} {w.lastName} — {w.jobTitle}</SelectItem>)}</SelectContent>
               </Select>
             </div>
             <div className="space-y-1.5">
@@ -593,11 +578,8 @@ export default function Workers() {
               <Input type="date" value={scheduleForm.date} onChange={e => setScheduleForm(f => ({ ...f, date: e.target.value }))} />
             </div>
             <div className="space-y-1.5">
-              <Label>Department</Label>
-              <Select value={scheduleForm.departmentId} onValueChange={v => setScheduleForm(f => ({ ...f, departmentId: v }))}>
-                <SelectTrigger><SelectValue placeholder="Select…" /></SelectTrigger>
-                <SelectContent>{departments.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}</SelectContent>
-              </Select>
+              <Label>Duty / Assignment *</Label>
+              <Input value={scheduleForm.duty} onChange={e => setScheduleForm(f => ({ ...f, duty: e.target.value }))} placeholder="e.g. Office duty, Security" />
             </div>
             <div className="space-y-1.5">
               <Label>Start Time</Label>
@@ -606,10 +588,6 @@ export default function Workers() {
             <div className="space-y-1.5">
               <Label>End Time</Label>
               <Input type="time" value={scheduleForm.endTime} onChange={e => setScheduleForm(f => ({ ...f, endTime: e.target.value }))} />
-            </div>
-            <div className="space-y-1.5 sm:col-span-2">
-              <Label>Duty / Assignment *</Label>
-              <Input value={scheduleForm.duty} onChange={e => setScheduleForm(f => ({ ...f, duty: e.target.value }))} placeholder="e.g. Sound Mixing, Ushering, Choir Direction" />
             </div>
             <div className="space-y-1.5 sm:col-span-2">
               <Label>Notes</Label>
@@ -625,4 +603,3 @@ export default function Workers() {
     </motion.div>
   );
 }
-

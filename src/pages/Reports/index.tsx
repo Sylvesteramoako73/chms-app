@@ -11,7 +11,7 @@ import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Legend, PieChart, Pie, Cell,
 } from 'recharts';
-import { Download, TrendingUp, Users, Coins, CalendarCheck, Loader2, Share2 } from 'lucide-react';
+import { Download, TrendingUp, Users, Coins, CalendarCheck, Loader2, Share2, BookOpen } from 'lucide-react';
 import { format, subMonths, startOfMonth, endOfMonth, eachMonthOfInterval } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 
@@ -26,6 +26,8 @@ export default function Reports() {
   const [startDate, setStartDate] = useState(format(subMonths(new Date(), 5), 'yyyy-MM-dd'));
   const [endDate, setEndDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [exporting, setExporting] = useState(false);
+  const currentYear = new Date().getFullYear();
+  const [annualYear, setAnnualYear] = useState(currentYear);
 
   const membershipChartRef   = useRef<HTMLDivElement>(null);
   const financialChartRef    = useRef<HTMLDivElement>(null);
@@ -314,6 +316,316 @@ export default function Reports() {
     }
   };
 
+  const handleAnnualReportPDF = async () => {
+    if (!actions.canExportReports) {
+      toast({ title: 'Access denied', description: 'Your role cannot export reports.', variant: 'destructive' }); return;
+    }
+    setExporting(true);
+    try {
+      const { jsPDF } = await import('jspdf');
+      const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+      const W = doc.internal.pageSize.getWidth();
+      const H = doc.internal.pageSize.getHeight();
+      const M = 14;
+      const CW = W - M * 2;
+
+      const yearStart = new Date(annualYear, 0, 1);
+      const yearEnd = new Date(annualYear, 11, 31);
+      const yearGiving = giving.filter(g => { const d = new Date(g.date); return d >= yearStart && d <= yearEnd; });
+      const yearAttendance = attendance.filter(a => { const d = new Date(a.date); return d >= yearStart && d <= yearEnd; });
+      const yearNewMembers = members.filter(m => { const d = new Date(m.joinDate); return d >= yearStart && d <= yearEnd; });
+      const yearTotalGiving = yearGiving.reduce((s, g) => s + g.amount, 0);
+      const yearAvgAtt = yearAttendance.length > 0
+        ? Math.round(yearAttendance.reduce((s, a) => s + a.presentMemberIds.length + a.visitorsCount, 0) / yearAttendance.length)
+        : 0;
+
+      // ── Cover Page ───────────────────────────────────────────────────────────
+      doc.setFillColor(11, 17, 32);
+      doc.rect(0, 0, W, H, 'F');
+      doc.setFillColor(201, 168, 76);
+      doc.rect(0, 0, W, 2, 'F');
+      doc.rect(0, H - 2, W, 2, 'F');
+
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(28);
+      doc.setTextColor(201, 168, 76);
+      doc.text('ChurchCare', W / 2, H / 2 - 32, { align: 'center' });
+
+      doc.setFontSize(72);
+      doc.setTextColor(255, 255, 255);
+      doc.text(String(annualYear), W / 2, H / 2 + 18, { align: 'center' });
+
+      doc.setFontSize(16);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(201, 168, 76);
+      doc.text('ANNUAL REPORT', W / 2, H / 2 + 32, { align: 'center' });
+
+      doc.setDrawColor(201, 168, 76);
+      doc.setLineWidth(0.4);
+      doc.line(M + 20, H / 2 + 39, W - M - 20, H / 2 + 39);
+
+      doc.setFontSize(9);
+      doc.setTextColor(160, 170, 190);
+      doc.text(`Prepared: ${format(new Date(), 'MMMM d, yyyy')}`, W / 2, H / 2 + 48, { align: 'center' });
+      doc.text(`Total Members: ${members.length}`, W / 2, H / 2 + 56, { align: 'center' });
+
+      // ── Content Pages ────────────────────────────────────────────────────────
+      doc.addPage();
+      let y = M;
+
+      const paintHeader = () => {
+        doc.setFillColor(11, 17, 32);
+        doc.rect(0, 0, W, 24, 'F');
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(13);
+        doc.setTextColor(201, 168, 76);
+        doc.text('ChurchCare', M, 13);
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(160, 170, 190);
+        doc.text(`${annualYear} Annual Report`, M, 20);
+        doc.text(`Generated: ${format(new Date(), 'MMM d, yyyy')}`, W - M, 20, { align: 'right' });
+      };
+
+      const newPage = () => { doc.addPage(); paintHeader(); y = 32; };
+      const checkSpace = (needed: number) => { if (y + needed > H - M) newPage(); };
+
+      paintHeader();
+      y = 32;
+
+      // Executive Summary boxes
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(15);
+      doc.setTextColor(11, 17, 32);
+      doc.text('Executive Summary', M, y);
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(120, 130, 150);
+      doc.text(`January 1 – December 31, ${annualYear}`, M, y + 6);
+      doc.setDrawColor(201, 168, 76);
+      doc.setLineWidth(0.4);
+      doc.line(M, y + 9, W - M, y + 9);
+      y += 16;
+
+      const summaryStats = [
+        { label: 'Total Giving', value: `${GHS}${yearTotalGiving.toLocaleString()}` },
+        { label: 'New Members', value: String(yearNewMembers.length) },
+        { label: 'Services Held', value: String(yearAttendance.length) },
+        { label: 'Avg Attendance', value: String(yearAvgAtt) },
+      ];
+      const bW = (CW - 4.5) / 4;
+      summaryStats.forEach((s, i) => {
+        const x = M + i * (bW + 1.5);
+        doc.setFillColor(245, 245, 240);
+        doc.roundedRect(x, y, bW, 20, 2, 2, 'F');
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(15);
+        doc.setTextColor(11, 17, 32);
+        doc.text(s.value, x + bW / 2, y + 11, { align: 'center' });
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(7);
+        doc.setTextColor(100, 110, 130);
+        doc.text(s.label, x + bW / 2, y + 17, { align: 'center' });
+      });
+      y += 28;
+
+      const sectionHead = (title: string) => {
+        checkSpace(14);
+        doc.setFillColor(201, 168, 76);
+        doc.rect(M, y, 3, 10, 'F');
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(12);
+        doc.setTextColor(11, 17, 32);
+        doc.text(title, M + 6, y + 7);
+        y += 14;
+      };
+
+      // ── Finance ──────────────────────────────────────────────────────────────
+      sectionHead('Financial Overview');
+      const givingTypes: Record<string, number> = {};
+      yearGiving.forEach(g => { givingTypes[g.type] = (givingTypes[g.type] ?? 0) + g.amount; });
+      Object.entries(givingTypes).forEach(([type, amount], ri) => {
+        checkSpace(7);
+        doc.setFillColor(ri % 2 === 0 ? 250 : 245, 250, 248);
+        doc.rect(M, y, CW, 7, 'F');
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(9);
+        doc.setTextColor(50, 60, 80);
+        doc.text(type, M + 3, y + 5);
+        const pct = yearTotalGiving > 0 ? Math.round((amount / yearTotalGiving) * 100) : 0;
+        doc.setTextColor(120, 130, 150);
+        doc.text(`${pct}%`, W - M - 30, y + 5, { align: 'right' });
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(11, 17, 32);
+        doc.text(`${GHS}${amount.toLocaleString()}`, W - M - 3, y + 5, { align: 'right' });
+        y += 7;
+      });
+      checkSpace(8);
+      doc.setFillColor(220, 225, 235);
+      doc.rect(M, y, CW, 8, 'F');
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(9);
+      doc.setTextColor(11, 17, 32);
+      doc.text('TOTAL', M + 3, y + 5.5);
+      doc.text(`${GHS}${yearTotalGiving.toLocaleString()}`, W - M - 3, y + 5.5, { align: 'right' });
+      y += 14;
+
+      // Monthly giving table
+      sectionHead('Monthly Giving Breakdown');
+      const mColX = [M + 3, M + 42, M + 82, M + 122, M + 155];
+      doc.setFillColor(11, 17, 32);
+      doc.rect(M, y, CW, 7, 'F');
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8);
+      doc.setTextColor(255, 255, 255);
+      ['Month', 'Tithe', 'Offering', 'Other', 'Total'].forEach((h, i) => doc.text(h, mColX[i], y + 5));
+      y += 7;
+
+      const yearMonths = eachMonthOfInterval({ start: yearStart, end: yearEnd });
+      const annTitheTotal = { t: 0, o: 0, x: 0 };
+      yearMonths.forEach((month, ri) => {
+        checkSpace(6);
+        const ms = startOfMonth(month); const me = endOfMonth(month);
+        const recs = yearGiving.filter(g => { const d = new Date(g.date); return d >= ms && d <= me; });
+        const t = recs.filter(g => g.type === 'Tithe').reduce((s, g) => s + g.amount, 0);
+        const o = recs.filter(g => g.type === 'Offering').reduce((s, g) => s + g.amount, 0);
+        const x = recs.filter(g => g.type !== 'Tithe' && g.type !== 'Offering').reduce((s, g) => s + g.amount, 0);
+        annTitheTotal.t += t; annTitheTotal.o += o; annTitheTotal.x += x;
+        doc.setFillColor(ri % 2 === 0 ? 250 : 245, 250, 248);
+        doc.rect(M, y, CW, 6, 'F');
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8);
+        doc.setTextColor(50, 60, 80);
+        doc.text(format(month, 'MMMM'), mColX[0], y + 4);
+        doc.text(`${GHS}${t.toLocaleString()}`, mColX[1], y + 4);
+        doc.text(`${GHS}${o.toLocaleString()}`, mColX[2], y + 4);
+        doc.text(`${GHS}${x.toLocaleString()}`, mColX[3], y + 4);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(11, 17, 32);
+        doc.text(`${GHS}${(t + o + x).toLocaleString()}`, mColX[4], y + 4);
+        y += 6;
+      });
+      checkSpace(8);
+      doc.setFillColor(220, 225, 235);
+      doc.rect(M, y, CW, 8, 'F');
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8);
+      doc.setTextColor(11, 17, 32);
+      doc.text('TOTAL', mColX[0], y + 5.5);
+      doc.text(`${GHS}${annTitheTotal.t.toLocaleString()}`, mColX[1], y + 5.5);
+      doc.text(`${GHS}${annTitheTotal.o.toLocaleString()}`, mColX[2], y + 5.5);
+      doc.text(`${GHS}${annTitheTotal.x.toLocaleString()}`, mColX[3], y + 5.5);
+      doc.text(`${GHS}${yearTotalGiving.toLocaleString()}`, mColX[4], y + 5.5);
+      y += 14;
+
+      // ── Attendance ───────────────────────────────────────────────────────────
+      sectionHead('Attendance Summary');
+      const aColX = [M + 3, M + 60, M + 105, M + 150];
+      doc.setFillColor(11, 17, 32);
+      doc.rect(M, y, CW, 7, 'F');
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8);
+      doc.setTextColor(255, 255, 255);
+      ['Month', 'Services', 'Total Attendance', 'Avg / Service'].forEach((h, i) => doc.text(h, aColX[i], y + 5));
+      y += 7;
+      yearMonths.forEach((month, ri) => {
+        checkSpace(6);
+        const ms = startOfMonth(month); const me = endOfMonth(month);
+        const recs = yearAttendance.filter(a => { const d = new Date(a.date); return d >= ms && d <= me; });
+        const total = recs.reduce((s, a) => s + a.presentMemberIds.length + a.visitorsCount, 0);
+        const avg = recs.length > 0 ? Math.round(total / recs.length) : 0;
+        doc.setFillColor(ri % 2 === 0 ? 250 : 245, 250, 248);
+        doc.rect(M, y, CW, 6, 'F');
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8);
+        doc.setTextColor(50, 60, 80);
+        doc.text(format(month, 'MMMM'), aColX[0], y + 4);
+        doc.text(String(recs.length), aColX[1], y + 4);
+        doc.text(String(total), aColX[2], y + 4);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(11, 17, 32);
+        doc.text(String(avg), aColX[3], y + 4);
+        y += 6;
+      });
+      y += 6;
+
+      // ── Membership ───────────────────────────────────────────────────────────
+      sectionHead('Membership Summary');
+      const statusCounts: Record<string, number> = {};
+      members.forEach(m => { statusCounts[m.status] = (statusCounts[m.status] ?? 0) + 1; });
+      doc.setFillColor(11, 17, 32);
+      doc.rect(M, y, CW, 7, 'F');
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8);
+      doc.setTextColor(255, 255, 255);
+      doc.text('Status', M + 3, y + 5);
+      doc.text('Count', M + 110, y + 5);
+      doc.text('Share', M + 150, y + 5);
+      y += 7;
+      [...Object.entries(statusCounts), ['New This Year', yearNewMembers.length] as [string, number]].forEach(([status, count], ri) => {
+        checkSpace(7);
+        doc.setFillColor(ri % 2 === 0 ? 250 : 245, 250, 248);
+        doc.rect(M, y, CW, 7, 'F');
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(9);
+        doc.setTextColor(50, 60, 80);
+        doc.text(String(status), M + 3, y + 5);
+        doc.text(String(count), M + 110, y + 5);
+        const pct = members.length > 0 ? Math.round(((count as number) / members.length) * 100) : 0;
+        doc.text(`${pct}%`, M + 150, y + 5);
+        y += 7;
+      });
+      checkSpace(8);
+      doc.setFillColor(220, 225, 235);
+      doc.rect(M, y, CW, 8, 'F');
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(9);
+      doc.setTextColor(11, 17, 32);
+      doc.text('TOTAL MEMBERS', M + 3, y + 5.5);
+      doc.text(String(members.length), M + 110, y + 5.5);
+      doc.text('100%', M + 150, y + 5.5);
+      y += 14;
+
+      // ── Campaigns ────────────────────────────────────────────────────────────
+      if (campaignSummary.length > 0) {
+        sectionHead('Campaigns & Pledges');
+        campaignSummary.forEach((c, ri) => {
+          checkSpace(9);
+          doc.setFillColor(ri % 2 === 0 ? 250 : 245, 250, 248);
+          doc.rect(M, y, CW, 9, 'F');
+          doc.setFont('helvetica', 'bold');
+          doc.setFontSize(8);
+          doc.setTextColor(11, 17, 32);
+          doc.text(c.title.slice(0, 42), M + 3, y + 4);
+          doc.setFont('helvetica', 'normal');
+          doc.setTextColor(80, 90, 110);
+          doc.setFontSize(7);
+          doc.text(`Goal: ${GHS}${c.goalAmount.toLocaleString()}  ·  Raised: ${GHS}${c.raised.toLocaleString()}  ·  Progress: ${c.pct}%`, M + 3, y + 8);
+          y += 9;
+        });
+      }
+
+      // Page footers (skip cover page)
+      const totalPages = (doc as unknown as { internal: { pages: unknown[] } }).internal.pages.length - 1;
+      for (let p = 2; p <= totalPages; p++) {
+        doc.setPage(p);
+        const ph = doc.internal.pageSize.getHeight();
+        doc.setFontSize(7);
+        doc.setTextColor(160, 170, 185);
+        doc.text('ChurchCare — Confidential Annual Report', M, ph - 6);
+        doc.text(`Page ${p - 1} of ${totalPages - 1}`, W - M, ph - 6, { align: 'right' });
+      }
+
+      doc.save(`ChurchCare_Annual_Report_${annualYear}.pdf`);
+      toast({ title: 'Annual Report generated', description: `ChurchCare_Annual_Report_${annualYear}.pdf downloaded.` });
+    } catch (err) {
+      console.error(err);
+      toast({ title: 'Export failed', description: 'Could not generate report. Please try again.', variant: 'destructive' });
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -321,13 +633,18 @@ export default function Reports() {
           <h1 className="text-4xl font-display font-bold text-navy-900 dark:text-cream mb-1">Reports & Analytics</h1>
           <p className="text-sm text-muted-foreground">Finance, attendance, and membership insights.</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button variant="outline" size="sm" onClick={handleShare} className="gap-2" disabled={exporting}>
             <Share2 className="w-4 h-4" /> Share
           </Button>
           <Button size="sm" onClick={handleExportPDF} disabled={exporting || !actions.canExportReports} className="gap-2 bg-white hover:bg-gray-50 text-navy-900 font-medium">
             {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
             {exporting ? 'Generating…' : 'Export PDF'}
+          </Button>
+          <Button size="sm" onClick={handleAnnualReportPDF} disabled={exporting || !actions.canExportReports}
+            className="gap-2 bg-navy-900 hover:bg-navy-800 text-gold-400 font-medium dark:bg-navy-700">
+            {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <BookOpen className="w-4 h-4" />}
+            Annual Report
           </Button>
         </div>
       </div>
@@ -345,6 +662,16 @@ export default function Reports() {
         <Button variant="outline" size="sm" onClick={() => { setStartDate(format(subMonths(new Date(), 5), 'yyyy-MM-dd')); setEndDate(format(new Date(), 'yyyy-MM-dd')); }}>
           Reset
         </Button>
+        <div className="flex items-center gap-1.5">
+          <span className="text-xs text-muted-foreground">Full year:</span>
+          {[currentYear - 1, currentYear].map(yr => (
+            <Button key={yr} variant={annualYear === yr ? 'default' : 'outline'} size="sm"
+              className={`h-7 px-2.5 text-xs ${annualYear === yr ? 'bg-navy-900 text-gold-400 dark:bg-navy-700' : ''}`}
+              onClick={() => { setAnnualYear(yr); setStartDate(`${yr}-01-01`); setEndDate(`${yr}-12-31`); }}>
+              {yr}
+            </Button>
+          ))}
+        </div>
         <p className="text-xs text-muted-foreground self-center">Showing {months.length} month{months.length !== 1 ? 's' : ''}</p>
       </div>
 

@@ -253,7 +253,13 @@ app.post('/api/sms/send-bulk', async (req, res) => {
       }),
     });
 
-    const data = await response.json();
+    const raw = await response.text();
+    console.log('[SMS] mNotify raw response:', raw.slice(0, 300));
+    let data;
+    try { data = JSON.parse(raw); } catch {
+      console.error('[SMS] mNotify returned non-JSON (possible IP block or redirect):', raw.slice(0, 200));
+      return res.status(502).json({ error: 'mNotify returned an unexpected response. The API may be blocking requests from this server region.' });
+    }
     console.log('[SMS] mNotify response:', JSON.stringify(data));
 
     if (data.status === 'success' || data.code === 1000) {
@@ -277,9 +283,14 @@ app.post('/api/sms/send-bulk', async (req, res) => {
 app.get('/api/sms/balance', async (req, res) => {
   const key = (req.query.key || MNOTIFY_API_KEY).trim();
   try {
-    const url = `https://api.mnotify.com/api/balance?key=${encodeURIComponent(key)}`;
+    const url = `https://api.mnotify.com/api/balance/sms?key=${encodeURIComponent(key)}`;
     const response = await fetch(url);
-    const data = await response.json();
+    const raw = await response.text();
+    let data;
+    try { data = JSON.parse(raw); } catch {
+      console.error('[SMS] Balance check got non-JSON:', raw.slice(0, 200));
+      return res.status(502).json({ error: 'mNotify returned an unexpected response.', raw: raw.slice(0, 200) });
+    }
     res.json(data);
   } catch (err) {
     res.status(500).json({ error: err.message });

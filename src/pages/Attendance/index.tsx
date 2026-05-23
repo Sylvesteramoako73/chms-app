@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { CalendarCheck, Users, Plus, Search, TrendingUp } from 'lucide-react';
+import { CalendarCheck, Users, Plus, Search, TrendingUp, Hash, ListChecks } from 'lucide-react';
 import { format, parseISO, subMonths, startOfMonth, endOfMonth, eachMonthOfInterval } from 'date-fns';
 
 const SERVICE_TYPES: ServiceType[] = [
@@ -26,23 +26,30 @@ export default function Attendance() {
   const [serviceFilter, setServiceFilter] = useState<string>('all');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [memberSearch, setMemberSearch] = useState('');
+  const [entryMode, setEntryMode] = useState<'checklist' | 'quickcount'>('quickcount');
 
   // New attendance form state
   const [logService, setLogService] = useState<ServiceType>('Sunday First Service');
   const [logDate, setLogDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [logVisitors, setLogVisitors] = useState('0');
   const [presentIds, setPresentIds] = useState<Set<string>>(new Set());
+  const [logMale, setLogMale] = useState('0');
+  const [logFemale, setLogFemale] = useState('0');
+  const [logChildren, setLogChildren] = useState('0');
+
+  const quickTotal = (parseInt(logMale) || 0) + (parseInt(logFemale) || 0) + (parseInt(logChildren) || 0);
 
   const filteredRecords = attendance
     .filter(a => serviceFilter === 'all' || a.serviceType === serviceFilter)
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
   const totalServices = attendance.length;
+  const getTotal = (a: AttendanceRecord) => (a.quickCount ?? a.presentMemberIds.length) + a.visitorsCount;
   const avgAttendance = totalServices > 0
-    ? Math.round(attendance.reduce((s, a) => s + a.presentMemberIds.length + a.visitorsCount, 0) / totalServices)
+    ? Math.round(attendance.reduce((s, a) => s + getTotal(a), 0) / totalServices)
     : 0;
   const highestAttendance = attendance.reduce((max, a) => {
-    const t = a.presentMemberIds.length + a.visitorsCount;
+    const t = getTotal(a);
     return t > max ? t : max;
   }, 0);
 
@@ -57,7 +64,7 @@ export default function Attendance() {
         return d >= start && d <= end;
       });
       const avg = monthRecords.length > 0
-        ? Math.round(monthRecords.reduce((s, a) => s + a.presentMemberIds.length + a.visitorsCount, 0) / monthRecords.length)
+        ? Math.round(monthRecords.reduce((s, a) => s + getTotal(a), 0) / monthRecords.length)
         : 0;
       return { name: format(month, 'MMM'), Attendance: avg };
     });
@@ -82,23 +89,34 @@ export default function Attendance() {
     setLogService('Sunday First Service');
     setLogDate(format(new Date(), 'yyyy-MM-dd'));
     setLogVisitors('0');
+    setLogMale('0');
+    setLogFemale('0');
+    setLogChildren('0');
     setPresentIds(new Set());
     setMemberSearch('');
     setDialogOpen(true);
   };
 
   const handleLog = () => {
+    const isQuick = entryMode === 'quickcount';
     const record: AttendanceRecord = {
       id: `a${Date.now()}`,
       serviceType: logService,
       date: logDate,
-      presentMemberIds: Array.from(presentIds),
+      presentMemberIds: isQuick ? [] : Array.from(presentIds),
       visitorsCount: parseInt(logVisitors) || 0,
+      ...(isQuick && {
+        maleCount: parseInt(logMale) || 0,
+        femaleCount: parseInt(logFemale) || 0,
+        childrenCount: parseInt(logChildren) || 0,
+        quickCount: quickTotal,
+      }),
     };
     addAttendance(record);
+    const memberCount = isQuick ? quickTotal : record.presentMemberIds.length;
     toast({
       title: 'Attendance logged',
-      description: `${record.presentMemberIds.length} members + ${record.visitorsCount} visitors recorded for ${logService}.`,
+      description: `${memberCount} present + ${record.visitorsCount} visitors recorded for ${logService}.`,
     });
     setDialogOpen(false);
   };
@@ -192,7 +210,9 @@ export default function Attendance() {
                 <TableRow className="border-border/40">
                   <TableHead className="pl-6">Date</TableHead>
                   <TableHead>Service Type</TableHead>
-                  <TableHead className="text-right">Members</TableHead>
+                  <TableHead className="text-right">Male</TableHead>
+                  <TableHead className="text-right">Female</TableHead>
+                  <TableHead className="text-right">Children</TableHead>
                   <TableHead className="text-right">Visitors</TableHead>
                   <TableHead className="text-right pr-6">Total</TableHead>
                 </TableRow>
@@ -200,18 +220,21 @@ export default function Attendance() {
               <TableBody>
                 {filteredRecords.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={5} className="py-16 text-center text-muted-foreground">
+                    <TableCell colSpan={7} className="py-16 text-center text-muted-foreground">
                       No attendance records yet.
                     </TableCell>
                   </TableRow>
                 )}
                 {filteredRecords.map(record => {
-                  const total = record.presentMemberIds.length + record.visitorsCount;
+                  const memberCount = record.quickCount ?? record.presentMemberIds.length;
+                  const total = memberCount + record.visitorsCount;
                   return (
                     <TableRow key={record.id} className="hover:bg-muted/20 border-border/30 transition-colors">
                       <TableCell className="pl-6 font-medium">{format(parseISO(record.date), 'EEE, MMM d yyyy')}</TableCell>
                       <TableCell className="text-sm text-muted-foreground">{record.serviceType}</TableCell>
-                      <TableCell className="text-right text-sm">{record.presentMemberIds.length}</TableCell>
+                      <TableCell className="text-right text-sm text-blue-500">{record.maleCount ?? '—'}</TableCell>
+                      <TableCell className="text-right text-sm text-pink-500">{record.femaleCount ?? '—'}</TableCell>
+                      <TableCell className="text-right text-sm text-amber-500">{record.childrenCount ?? '—'}</TableCell>
                       <TableCell className="text-right text-sm text-muted-foreground">{record.visitorsCount}</TableCell>
                       <TableCell className="text-right pr-6 font-bold text-gold-600 dark:text-gold-400">{total}</TableCell>
                     </TableRow>
@@ -230,6 +253,7 @@ export default function Attendance() {
             <DialogTitle className="font-display text-2xl">Log Attendance</DialogTitle>
           </DialogHeader>
           <div className="p-6 space-y-4 overflow-y-auto flex-1">
+            {/* Service + Date */}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label>Service Type</Label>
@@ -244,38 +268,85 @@ export default function Attendance() {
                 <Label>Date</Label>
                 <Input type="date" value={logDate} onChange={e => setLogDate(e.target.value)} />
               </div>
-              <div className="space-y-1.5 col-span-2">
-                <Label>Visitor Count</Label>
-                <Input type="number" min="0" value={logVisitors} onChange={e => setLogVisitors(e.target.value)} placeholder="0" />
-              </div>
             </div>
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <Label>Members Present ({presentIds.size} selected)</Label>
-                <div className="flex gap-2">
-                  <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={selectAll}>Select All</Button>
-                  <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={clearAll}>Clear</Button>
+
+            {/* Mode toggle */}
+            <div className="flex rounded-lg border border-border/50 overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setEntryMode('quickcount')}
+                className={`flex-1 flex items-center justify-center gap-2 py-2 text-sm font-medium transition-colors ${entryMode === 'quickcount' ? 'bg-navy-900 text-white dark:bg-gold-500 dark:text-navy-900' : 'text-muted-foreground hover:bg-muted/40'}`}
+              >
+                <Hash className="w-3.5 h-3.5" /> Quick Count
+              </button>
+              <button
+                type="button"
+                onClick={() => setEntryMode('checklist')}
+                className={`flex-1 flex items-center justify-center gap-2 py-2 text-sm font-medium transition-colors ${entryMode === 'checklist' ? 'bg-navy-900 text-white dark:bg-gold-500 dark:text-navy-900' : 'text-muted-foreground hover:bg-muted/40'}`}
+              >
+                <ListChecks className="w-3.5 h-3.5" /> Member Checklist
+              </button>
+            </div>
+
+            {/* Quick Count mode */}
+            {entryMode === 'quickcount' && (
+              <div className="space-y-4">
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="space-y-1.5">
+                    <Label className="text-blue-500">Male</Label>
+                    <Input type="number" min="0" value={logMale} onChange={e => setLogMale(e.target.value)} placeholder="0" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-pink-500">Female</Label>
+                    <Input type="number" min="0" value={logFemale} onChange={e => setLogFemale(e.target.value)} placeholder="0" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-amber-500">Children</Label>
+                    <Input type="number" min="0" value={logChildren} onChange={e => setLogChildren(e.target.value)} placeholder="0" />
+                  </div>
+                </div>
+                <div className="rounded-lg bg-muted/30 border border-border/40 p-4 flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">Total Members</span>
+                  <span className="text-2xl font-bold text-gold-600 dark:text-gold-400">{quickTotal}</span>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Visitors</Label>
+                  <Input type="number" min="0" value={logVisitors} onChange={e => setLogVisitors(e.target.value)} placeholder="0" />
                 </div>
               </div>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-                <Input className="pl-9 h-9" placeholder="Search members…" value={memberSearch} onChange={e => setMemberSearch(e.target.value)} />
+            )}
+
+            {/* Checklist mode */}
+            {entryMode === 'checklist' && (
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <Label>Visitors</Label>
+                  <Input type="number" min="0" value={logVisitors} onChange={e => setLogVisitors(e.target.value)} placeholder="0" />
+                </div>
+                <div className="flex items-center justify-between">
+                  <Label>Members Present ({presentIds.size} selected)</Label>
+                  <div className="flex gap-2">
+                    <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={selectAll}>Select All</Button>
+                    <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={clearAll}>Clear</Button>
+                  </div>
+                </div>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                  <Input className="pl-9 h-9" placeholder="Search members…" value={memberSearch} onChange={e => setMemberSearch(e.target.value)} />
+                </div>
+                <div className="space-y-1.5 max-h-[240px] overflow-y-auto pr-1">
+                  {filteredMembers.map(m => (
+                    <label key={m.id} className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-muted/30 cursor-pointer transition-colors">
+                      <Checkbox checked={presentIds.has(m.id)} onCheckedChange={() => toggleMember(m.id)} />
+                      <div className="w-7 h-7 rounded-full bg-navy-100 dark:bg-navy-800 flex items-center justify-center shrink-0 border border-navy-200 dark:border-navy-700">
+                        <span className="text-[10px] font-bold text-navy-700 dark:text-navy-200">{m.firstName[0]}{m.lastName[0]}</span>
+                      </div>
+                      <span className="text-sm font-medium">{m.firstName} {m.lastName}</span>
+                    </label>
+                  ))}
+                </div>
               </div>
-              <div className="space-y-1.5 max-h-[240px] overflow-y-auto pr-1">
-                {filteredMembers.map(m => (
-                  <label key={m.id} className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-muted/30 cursor-pointer transition-colors">
-                    <Checkbox
-                      checked={presentIds.has(m.id)}
-                      onCheckedChange={() => toggleMember(m.id)}
-                    />
-                    <div className="w-7 h-7 rounded-full bg-navy-100 dark:bg-navy-800 flex items-center justify-center shrink-0 border border-navy-200 dark:border-navy-700">
-                      <span className="text-[10px] font-bold text-navy-700 dark:text-navy-200">{m.firstName[0]}{m.lastName[0]}</span>
-                    </div>
-                    <span className="text-sm font-medium">{m.firstName} {m.lastName}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
+            )}
           </div>
           <DialogFooter className="p-6 pt-4 border-t border-border/40">
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>

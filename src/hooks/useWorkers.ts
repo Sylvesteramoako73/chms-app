@@ -7,11 +7,10 @@ const mapWorker = (r: any): Worker => ({
   id: r.id, memberId: r.member_id ?? undefined,
   firstName: r.first_name, lastName: r.last_name,
   phone: r.phone ?? '', email: r.email ?? undefined,
-  departmentId: r.department_id ?? '',
-  roleTitle: r.role_title ?? 'Member',
-  serviceUnit: r.service_unit ?? undefined,
+  jobTitle: r.job_title ?? '',
+  employmentType: r.employment_type ?? 'Full-time',
   status: r.status ?? 'Active',
-  joinDate: r.join_date ?? '',
+  startDate: r.start_date ?? r.join_date ?? '',
   notes: r.notes ?? undefined,
   createdAt: r.created_at ?? new Date().toISOString(),
 });
@@ -19,9 +18,9 @@ const toWorkerRow = (w: Worker) => ({
   id: w.id, member_id: w.memberId ?? null,
   first_name: w.firstName, last_name: w.lastName,
   phone: w.phone, email: w.email ?? null,
-  department_id: w.departmentId || null,
-  role_title: w.roleTitle, service_unit: w.serviceUnit ?? null,
-  status: w.status, join_date: w.joinDate, notes: w.notes ?? null,
+  job_title: w.jobTitle,
+  employment_type: w.employmentType,
+  status: w.status, start_date: w.startDate, notes: w.notes ?? null,
 });
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -38,14 +37,13 @@ const toAttendanceRow = (a: WorkerAttendance) => ({
 const mapSchedule = (r: any): WorkerSchedule => ({
   id: r.id, workerId: r.worker_id, date: r.date,
   startTime: r.start_time, endTime: r.end_time,
-  duty: r.duty, departmentId: r.department_id ?? '',
-  notes: r.notes ?? undefined, status: r.status ?? 'Scheduled',
+  duty: r.duty, notes: r.notes ?? undefined,
+  status: r.status ?? 'Scheduled',
 });
 const toScheduleRow = (s: WorkerSchedule) => ({
   id: s.id, worker_id: s.workerId, date: s.date,
   start_time: s.startTime, end_time: s.endTime,
-  duty: s.duty, department_id: s.departmentId || null,
-  notes: s.notes ?? null, status: s.status,
+  duty: s.duty, notes: s.notes ?? null, status: s.status,
 });
 
 export function useWorkers() {

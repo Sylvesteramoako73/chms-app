@@ -9,8 +9,9 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Search, Trash2, Pencil, UserPlus, Phone, Mail, Clock } from 'lucide-react';
+import { Plus, Search, Trash2, Pencil, UserPlus, Phone, Mail, Clock, Kanban, Check, LayoutList } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 
 const STATUS_STYLES: Record<VisitorFollowUpStatus, string> = {
@@ -30,6 +31,32 @@ const EMPTY_FORM: Omit<VisitorRecord, 'id'> = {
   serviceAttended: 'Sunday First Service', howHeard: '', followUpStatus: 'Pending',
   followUpDate: '', notes: '',
 };
+
+const PIPELINE_COLS: Array<{
+  status: VisitorFollowUpStatus;
+  label: string;
+  next?: VisitorFollowUpStatus;
+  colClass: string;
+  headerTextClass: string;
+  countClass: string;
+}> = [
+  { status: 'Pending',   label: 'Pending',   next: 'Contacted',
+    colClass: 'border-amber-200 dark:border-amber-800/40 bg-amber-50/50 dark:bg-amber-900/10',
+    headerTextClass: 'text-amber-700 dark:text-amber-400',
+    countClass: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400' },
+  { status: 'Contacted', label: 'Contacted', next: 'Revisited',
+    colClass: 'border-blue-200 dark:border-blue-800/40 bg-blue-50/50 dark:bg-blue-900/10',
+    headerTextClass: 'text-blue-700 dark:text-blue-400',
+    countClass: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400' },
+  { status: 'Revisited', label: 'Revisited', next: 'Converted',
+    colClass: 'border-purple-200 dark:border-purple-800/40 bg-purple-50/50 dark:bg-purple-900/10',
+    headerTextClass: 'text-purple-700 dark:text-purple-400',
+    countClass: 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400' },
+  { status: 'Converted', label: 'Converted',
+    colClass: 'border-sage-200 dark:border-sage-800/40 bg-sage-50/50 dark:bg-sage-900/10',
+    headerTextClass: 'text-sage-700 dark:text-sage-400',
+    countClass: 'bg-sage-100 dark:bg-sage-900/30 text-sage-700 dark:text-sage-400' },
+];
 
 export default function Visitors() {
   const { visitors, addVisitor, updateVisitor, deleteVisitor } = useData();
@@ -128,84 +155,147 @@ export default function Visitors() {
         ))}
       </div>
 
-      {/* Table */}
-      <Card className="glass border-none shadow-sm">
-        <CardHeader className="pb-3">
-          <CardTitle>Visitor Log</CardTitle>
-          <CardDescription>Track first-time visitors and their follow-up progress</CardDescription>
-          <div className="flex flex-col sm:flex-row gap-3 pt-2">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input placeholder="Search by name or phone…" className="pl-9" value={search} onChange={e => setSearch(e.target.value)} />
-            </div>
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-full sm:w-[180px]"><SelectValue placeholder="All Statuses" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Statuses</SelectItem>
-                <SelectItem value="Pending">Pending</SelectItem>
-                <SelectItem value="Contacted">Contacted</SelectItem>
-                <SelectItem value="Revisited">Revisited</SelectItem>
-                <SelectItem value="Converted">Converted</SelectItem>
-              </SelectContent>
-            </Select>
+      <Tabs defaultValue="list" className="space-y-4">
+        <TabsList>
+          <TabsTrigger value="list" className="gap-2"><LayoutList className="w-3.5 h-3.5" />List View</TabsTrigger>
+          <TabsTrigger value="pipeline" className="gap-2"><Kanban className="w-3.5 h-3.5" />Pipeline</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="list">
+          <Card className="glass border-none shadow-sm">
+            <CardHeader className="pb-3">
+              <CardTitle>Visitor Log</CardTitle>
+              <CardDescription>Track first-time visitors and their follow-up progress</CardDescription>
+              <div className="flex flex-col sm:flex-row gap-3 pt-2">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input placeholder="Search by name or phone…" className="pl-9" value={search} onChange={e => setSearch(e.target.value)} />
+                </div>
+                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                  <SelectTrigger className="w-full sm:w-[180px]"><SelectValue placeholder="All Statuses" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Statuses</SelectItem>
+                    <SelectItem value="Pending">Pending</SelectItem>
+                    <SelectItem value="Contacted">Contacted</SelectItem>
+                    <SelectItem value="Revisited">Revisited</SelectItem>
+                    <SelectItem value="Converted">Converted</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </CardHeader>
+            <CardContent className="p-0">
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="border-border/40">
+                      <TableHead className="pl-6">Visit Date</TableHead>
+                      <TableHead>Name</TableHead>
+                      <TableHead className="hidden sm:table-cell">Phone</TableHead>
+                      <TableHead className="hidden md:table-cell">Service</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="hidden lg:table-cell">Follow-up Date</TableHead>
+                      <TableHead className="text-right pr-6">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filtered.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={7} className="py-16 text-center text-muted-foreground">
+                          No visitors found. Log your first visitor to get started.
+                        </TableCell>
+                      </TableRow>
+                    )}
+                    {filtered.map(v => (
+                      <TableRow key={v.id} className="hover:bg-muted/20 border-border/30 transition-colors">
+                        <TableCell className="pl-6 font-medium text-sm">{format(parseISO(v.visitDate), 'MMM d, yyyy')}</TableCell>
+                        <TableCell className="font-medium text-sm">
+                          {v.name}
+                          {v.email && <p className="text-xs text-muted-foreground">{v.email}</p>}
+                        </TableCell>
+                        <TableCell className="hidden sm:table-cell text-sm text-muted-foreground">{v.phone ?? '—'}</TableCell>
+                        <TableCell className="hidden md:table-cell text-sm text-muted-foreground">{v.serviceAttended ?? '—'}</TableCell>
+                        <TableCell>
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold border ${STATUS_STYLES[v.followUpStatus]}`}>
+                            {v.followUpStatus}
+                          </span>
+                        </TableCell>
+                        <TableCell className="hidden lg:table-cell text-sm text-muted-foreground">
+                          {v.followUpDate ? format(parseISO(v.followUpDate), 'MMM d, yyyy') : '—'}
+                        </TableCell>
+                        <TableCell className="text-right pr-6">
+                          <div className="flex items-center justify-end gap-1">
+                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(v)}>
+                              <Pencil className="w-3.5 h-3.5" />
+                            </Button>
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => handleDelete(v)}>
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="pipeline">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-start">
+            {PIPELINE_COLS.map(col => {
+              const colVisitors = visitors
+                .filter(v => v.followUpStatus === col.status)
+                .sort((a, b) => new Date(b.visitDate).getTime() - new Date(a.visitDate).getTime());
+              return (
+                <div key={col.status} className="space-y-3">
+                  <div className={`rounded-lg px-3 py-2 border ${col.colClass} flex items-center justify-between`}>
+                    <span className={`text-xs font-bold uppercase tracking-wider ${col.headerTextClass}`}>{col.label}</span>
+                    <span className={`text-xs font-bold px-1.5 py-0.5 rounded-full ${col.countClass}`}>{colVisitors.length}</span>
+                  </div>
+                  {colVisitors.length === 0 && (
+                    <div className="border-2 border-dashed border-border/30 rounded-lg p-5 text-center text-xs text-muted-foreground">
+                      Empty
+                    </div>
+                  )}
+                  {colVisitors.map(v => (
+                    <Card key={v.id} className="glass border-none shadow-sm hover:shadow-md transition-all cursor-pointer group"
+                      onClick={() => openEdit(v)}>
+                      <CardContent className="p-3 space-y-2">
+                        <div className="flex items-start justify-between gap-1">
+                          <p className="font-semibold text-sm leading-tight">{v.name}</p>
+                          <Button variant="ghost" size="icon"
+                            className="h-5 w-5 -mt-0.5 -mr-0.5 text-destructive opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                            onClick={e => { e.stopPropagation(); handleDelete(v); }}>
+                            <Trash2 className="w-3 h-3" />
+                          </Button>
+                        </div>
+                        {v.phone && (
+                          <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                            <Phone className="w-3 h-3 shrink-0" /> {v.phone}
+                          </div>
+                        )}
+                        <p className="text-xs text-muted-foreground">{format(parseISO(v.visitDate), 'MMM d, yyyy')}</p>
+                        {v.notes && <p className="text-xs text-muted-foreground italic line-clamp-1">{v.notes}</p>}
+                        {col.next ? (
+                          <Button size="sm" variant="outline" className="w-full h-7 text-xs gap-1 mt-1"
+                            onClick={e => { e.stopPropagation(); updateVisitor({ ...v, followUpStatus: col.next! }); toast({ title: `Moved to ${col.next}` }); }}>
+                            Move → {col.next}
+                          </Button>
+                        ) : (
+                          <div className="flex items-center gap-1 text-xs text-sage-600 dark:text-sage-400 font-medium">
+                            <Check className="w-3 h-3" /> Converted
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              );
+            })}
           </div>
-        </CardHeader>
-        <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow className="border-border/40">
-                  <TableHead className="pl-6">Visit Date</TableHead>
-                  <TableHead>Name</TableHead>
-                  <TableHead className="hidden sm:table-cell">Phone</TableHead>
-                  <TableHead className="hidden md:table-cell">Service</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="hidden lg:table-cell">Follow-up Date</TableHead>
-                  <TableHead className="text-right pr-6">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filtered.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={7} className="py-16 text-center text-muted-foreground">
-                      No visitors found. Log your first visitor to get started.
-                    </TableCell>
-                  </TableRow>
-                )}
-                {filtered.map(v => (
-                  <TableRow key={v.id} className="hover:bg-muted/20 border-border/30 transition-colors">
-                    <TableCell className="pl-6 font-medium text-sm">{format(parseISO(v.visitDate), 'MMM d, yyyy')}</TableCell>
-                    <TableCell className="font-medium text-sm">
-                      {v.name}
-                      {v.email && <p className="text-xs text-muted-foreground">{v.email}</p>}
-                    </TableCell>
-                    <TableCell className="hidden sm:table-cell text-sm text-muted-foreground">{v.phone ?? '—'}</TableCell>
-                    <TableCell className="hidden md:table-cell text-sm text-muted-foreground">{v.serviceAttended ?? '—'}</TableCell>
-                    <TableCell>
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold border ${STATUS_STYLES[v.followUpStatus]}`}>
-                        {v.followUpStatus}
-                      </span>
-                    </TableCell>
-                    <TableCell className="hidden lg:table-cell text-sm text-muted-foreground">
-                      {v.followUpDate ? format(parseISO(v.followUpDate), 'MMM d, yyyy') : '—'}
-                    </TableCell>
-                    <TableCell className="text-right pr-6">
-                      <div className="flex items-center justify-end gap-1">
-                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(v)}>
-                          <Pencil className="w-3.5 h-3.5" />
-                        </Button>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => handleDelete(v)}>
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
+        </TabsContent>
+      </Tabs>
 
       {/* Add / Edit Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>

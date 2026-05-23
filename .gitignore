@@ -25,3 +25,4 @@ session/
 *.njsproj
 *.sln
 *.sw?
+.vercel

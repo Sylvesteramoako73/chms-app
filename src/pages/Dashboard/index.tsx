@@ -60,7 +60,7 @@ export default function Dashboard() {
       className="space-y-8"
     >
       <div>
-        <h1 className="text-4xl font-display font-bold text-navy-900 dark:text-cream-100 mb-2">Dashboard</h1>
+        <h1 className="text-4xl font-display font-bold text-navy-900 dark:text-white mb-2">Dashboard</h1>
         <p className="text-navy-600 dark:text-navy-300">Overview of your church's health and activity.</p>
       </div>
 
@@ -71,7 +71,7 @@ export default function Dashboard() {
             <Users className="w-4 h-4 text-navy-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-navy-900 dark:text-cream-100">{totalMembers}</div>
+            <div className="text-3xl font-bold text-navy-900 dark:text-white">{totalMembers}</div>
             <p className="text-xs text-navy-500 mt-1 flex items-center">
               <TrendingUp className="w-3 h-3 mr-1 text-sage-500" />
               <span className="text-sage-500 font-medium">+{newMembersThisMonth}</span> this month
@@ -85,7 +85,7 @@ export default function Dashboard() {
             <Calendar className="w-4 h-4 text-navy-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-navy-900 dark:text-cream-100">
+            <div className="text-3xl font-bold text-navy-900 dark:text-white">
               {attendanceData.length > 0 ? Math.round(attendanceData.reduce((acc, curr) => acc + curr.Total, 0) / attendanceData.length) : 0}
             </div>
             <p className="text-xs text-navy-500 mt-1">Over last 4 services</p>
@@ -98,7 +98,7 @@ export default function Dashboard() {
             <Coins className="w-4 h-4 text-navy-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-navy-900 dark:text-cream-100">₵{thisMonthGiving.toLocaleString()}</div>
+            <div className="text-3xl font-bold text-navy-900 dark:text-white">₵{thisMonthGiving.toLocaleString()}</div>
             <p className="text-xs text-navy-500 mt-1">Tithes & Offerings</p>
           </CardContent>
         </Card>
@@ -111,7 +111,7 @@ export default function Dashboard() {
           <CardContent>
             {upcomingEvents.length > 0 ? (
               <>
-                <div className="text-lg font-bold text-navy-900 dark:text-cream-100 truncate">{upcomingEvents[0].title}</div>
+                <div className="text-lg font-bold text-navy-900 dark:text-white truncate">{upcomingEvents[0].title}</div>
                 <p className="text-sm font-medium text-gold-600 mt-1">{format(new Date(upcomingEvents[0].date), 'MMM d, yyyy')} • {upcomingEvents[0].time}</p>
               </>
             ) : (
