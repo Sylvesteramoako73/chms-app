@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useRef, type ReactNode } from 'react';
 import type { User } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 import type { UserRole } from '@/types';
@@ -42,6 +42,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [allProfiles, setAllProfiles] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
+  // Tracks the user ID that is already loaded so SIGNED_IN on tab-focus
+  // re-validation (same user) doesn't trigger a redundant profile re-fetch.
+  const loadedUserIdRef = useRef<string | null>(null);
 
   /**
    * Fetch the profile for a user.
@@ -82,6 +85,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const u = session?.user ?? null;
       setUser(u);
       if (u) {
+        loadedUserIdRef.current = u.id;
         Promise.all([fetchProfile(u), fetchAllProfiles()]).finally(() => setLoading(false));
       } else {
         setLoading(false);
@@ -92,13 +96,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const u = session?.user ?? null;
       setUser(u);
       if (u) {
-        // Skip TOKEN_REFRESHED — it fires every hour and can temporarily revert the role
-        // to 'Data Entry' if the profiles table query is slow or fails during the re-fetch.
-        if (event !== 'TOKEN_REFRESHED') {
-          fetchProfile(u);
-          fetchAllProfiles();
-        }
+        // SIGNED_IN fires on tab focus (Supabase re-validates the session).
+        // If it's the same user already loaded, skip the re-fetch to prevent
+        // the role from briefly flipping to 'Data Entry' during the round-trip.
+        if (event === 'SIGNED_IN' && u.id === loadedUserIdRef.current) return;
+        // TOKEN_REFRESHED fires every hour — also skip to avoid same role-flip issue.
+        if (event === 'TOKEN_REFRESHED') return;
+        loadedUserIdRef.current = u.id;
+        fetchProfile(u);
+        fetchAllProfiles();
       } else {
+        loadedUserIdRef.current = null;
         setProfile(null);
         setAllProfiles([]);
       }
