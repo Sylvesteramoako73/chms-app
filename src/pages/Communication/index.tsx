@@ -1,7 +1,10 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
+import emailjs from '@emailjs/browser';
 import { useData } from '@/context/DataContext';
 import { useRole } from '@/context/RoleContext';
+import { useAuth } from '@/context/AuthContext';
+import type { InAppNotification } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -52,8 +55,9 @@ function ChannelIcon({ channel, className }: { channel: string; className?: stri
 }
 
 export default function Communication() {
-  const { departments, members } = useData();
+  const { departments, members, addNotification } = useData();
   const { actions } = useRole();
+  const { profile } = useAuth();
   const { toast } = useToast();
 
   const [recipient, setRecipient] = useState('all');
@@ -155,6 +159,48 @@ export default function Communication() {
     }
   };
 
+  const sendViaEmail = async (text: string, subjectLine: string): Promise<boolean> => {
+    let ejs = { serviceId: '', templateId: '', publicKey: '' };
+    try { ejs = { ...ejs, ...JSON.parse(localStorage.getItem('chms_emailjs_settings') ?? '{}') }; } catch { /* */ }
+    if (!ejs.serviceId || !ejs.templateId || !ejs.publicKey) {
+      toast({ title: 'Email not configured', description: 'Go to Settings → Preferences and add your EmailJS credentials.', variant: 'destructive' });
+      return false;
+    }
+    let group = members;
+    if (recipient === 'active') group = members.filter(m => m.status === 'Active');
+    else if (recipient.startsWith('dept_')) {
+      const deptId = recipient.replace('dept_', '');
+      group = members.filter(m => m.departmentId === deptId);
+    }
+    const targets = group.filter(m => m.email);
+    if (targets.length === 0) {
+      toast({ title: 'No email addresses', description: 'None of the selected recipients have an email address on file.', variant: 'destructive' });
+      return false;
+    }
+    setWaSending(true);
+    let sent = 0; let failed = 0;
+    const churchName = JSON.parse(localStorage.getItem('chms_church_name') ?? '"ChurchCare"');
+    await Promise.allSettled(targets.map(async m => {
+      try {
+        await emailjs.send(ejs.serviceId, ejs.templateId, {
+          to_name: `${m.firstName} ${m.lastName}`,
+          to_email: m.email,
+          subject: subjectLine,
+          message: text,
+          from_name: churchName,
+        }, ejs.publicKey);
+        sent++;
+      } catch { failed++; }
+    }));
+    setWaSending(false);
+    if (sent > 0) {
+      toast({ title: 'Emails sent!', description: `${sent} email${sent !== 1 ? 's' : ''} delivered${failed > 0 ? `, ${failed} failed` : ''}.` });
+      return true;
+    }
+    toast({ title: 'Email failed', description: 'No emails were delivered. Check your EmailJS credentials.', variant: 'destructive' });
+    return false;
+  };
+
   const sendViaWhatsApp = async (phones: string[], text: string) => {
     if (phones.length === 0) {
       toast({ title: 'No phone numbers', description: 'None of the selected recipients have a phone number.', variant: 'destructive' });
@@ -197,14 +243,26 @@ export default function Communication() {
     if (msgStatus === 'Sent') {
       if (channel === 'sms') {
         const phones = getRecipientPhones(recipient);
-        const fullText = `${subject}\n\n${message}`;
-        const ok = await sendViaSMS(phones, fullText);
+        const ok = await sendViaSMS(phones, `${subject}\n\n${message}`);
         if (!ok) return;
       } else if (channel === 'whatsapp') {
         const phones = whatsappNumber ? [whatsappNumber] : getRecipientPhones(recipient);
-        const fullText = `${subject}\n\n${message}`;
-        const ok = await sendViaWhatsApp(phones, fullText);
+        const ok = await sendViaWhatsApp(phones, `${subject}\n\n${message}`);
         if (!ok) return;
+      } else if (channel === 'email') {
+        const ok = await sendViaEmail(message, subject);
+        if (!ok) return;
+      } else if (channel === 'inapp') {
+        const notif: InAppNotification = {
+          id: `notif_${Date.now()}`,
+          title: subject,
+          message,
+          recipient: getRecipientLabel(recipient),
+          createdAt: new Date().toISOString(),
+          createdBy: profile?.name,
+        };
+        addNotification(notif);
+        toast({ title: 'In-App notification sent', description: `Broadcast posted for ${getRecipientLabel(recipient)}.` });
       }
     }
 

@@ -208,6 +208,18 @@ export interface OutreachProspect {
 }
 
 // ============================================================
+// IN-APP NOTIFICATIONS
+// ============================================================
+export interface InAppNotification {
+  id: string;
+  title: string;
+  message: string;
+  recipient: string;
+  createdAt: string;
+  createdBy?: string;
+}
+
+// ============================================================
 // ASSETS & FACILITY MANAGEMENT
 // ============================================================
 export type AssetCategory = 'Equipment' | 'Instrument' | 'Vehicle' | 'Furniture' | 'Electronics' | 'Building' | 'Other';

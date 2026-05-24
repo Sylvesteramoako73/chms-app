@@ -66,6 +66,16 @@ export default function Settings() {
     localStorage.setItem('chms_sms_settings', JSON.stringify(next));
   };
 
+  const [emailjsSettings, setEmailjsSettings] = useState<{ serviceId: string; templateId: string; publicKey: string }>(() => {
+    try { return { serviceId: '', templateId: '', publicKey: '', ...JSON.parse(localStorage.getItem('chms_emailjs_settings') ?? '{}') }; }
+    catch { return { serviceId: '', templateId: '', publicKey: '' }; }
+  });
+  const updateEmailjsSettings = (key: 'serviceId' | 'templateId' | 'publicKey', val: string) => {
+    const next = { ...emailjsSettings, [key]: val };
+    setEmailjsSettings(next);
+    localStorage.setItem('chms_emailjs_settings', JSON.stringify(next));
+  };
+
   const [birthdayWA, setBirthdayWA] = useState<{ birthdayEnabled: boolean; anniversaryEnabled: boolean }>(() => {
     try { return { birthdayEnabled: false, anniversaryEnabled: false, ...JSON.parse(localStorage.getItem('chms_birthday_wa') ?? '{}') }; }
     catch { return { birthdayEnabled: false, anniversaryEnabled: false }; }
@@ -334,6 +344,40 @@ export default function Settings() {
                 />
                 <p className="text-xs text-muted-foreground">The name recipients see as the sender. Must be registered with mNotify.</p>
               </div>
+            </CardContent>
+          </Card>
+
+          {/* EmailJS Settings */}
+          <Card className="glass border-none shadow-sm">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2"><MessageCircle className="w-4 h-4 text-orange-500" /> Email Settings (EmailJS)</CardTitle>
+              <CardDescription>Connect EmailJS to send real emails from the Communication page — free up to 200/month, no backend needed.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="p-3 rounded-lg bg-amber-500/5 border border-amber-500/20 text-xs text-amber-700 dark:text-amber-400 space-y-1">
+                <p className="font-semibold">Setup steps:</p>
+                <ol className="list-decimal list-inside space-y-0.5">
+                  <li>Sign up at <strong>emailjs.com</strong> and connect your Gmail / Outlook</li>
+                  <li>Create an email template with variables: <code className="bg-muted px-1 rounded">{'{{to_name}}'}</code> <code className="bg-muted px-1 rounded">{'{{to_email}}'}</code> <code className="bg-muted px-1 rounded">{'{{subject}}'}</code> <code className="bg-muted px-1 rounded">{'{{message}}'}</code> <code className="bg-muted px-1 rounded">{'{{from_name}}'}</code></li>
+                  <li>Paste your Service ID, Template ID, and Public Key below</li>
+                </ol>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Service ID</Label>
+                <Input placeholder="e.g. service_xxxxxxx" value={emailjsSettings.serviceId} onChange={e => updateEmailjsSettings('serviceId', e.target.value)} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Template ID</Label>
+                <Input placeholder="e.g. template_xxxxxxx" value={emailjsSettings.templateId} onChange={e => updateEmailjsSettings('templateId', e.target.value)} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Public Key</Label>
+                <Input type="password" placeholder="Your EmailJS public key…" value={emailjsSettings.publicKey} onChange={e => updateEmailjsSettings('publicKey', e.target.value)} />
+                <p className="text-xs text-muted-foreground">Found in EmailJS → Account → General → Public Key.</p>
+              </div>
+              {emailjsSettings.serviceId && emailjsSettings.templateId && emailjsSettings.publicKey && (
+                <p className="text-xs text-sage-600 dark:text-sage-400 flex items-center gap-1">✓ EmailJS configured — email sending is enabled.</p>
+              )}
             </CardContent>
           </Card>
 

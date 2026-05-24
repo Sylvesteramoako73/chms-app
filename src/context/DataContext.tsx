@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
-import type { Member, Department, SmallGroup, AttendanceRecord, GivingRecord, EventRecord, Campus, PrayerRequest, PastoralVisit, VolunteerRole, Campaign, Pledge, PledgePayment, AuditLog, AuditEntity, AuditAction, VisitorRecord, OutreachActivity, OutreachProspect, Asset, Facility, MaintenanceRecord } from '../types';
+import type { Member, Department, SmallGroup, AttendanceRecord, GivingRecord, EventRecord, Campus, PrayerRequest, PastoralVisit, VolunteerRole, Campaign, Pledge, PledgePayment, AuditLog, AuditEntity, AuditAction, VisitorRecord, OutreachActivity, OutreachProspect, Asset, Facility, MaintenanceRecord, InAppNotification } from '../types';
 import { supabase } from '../lib/supabase';
 
 // ---------------------------------------------------------------------------
@@ -158,6 +158,10 @@ interface DataContextType {
   updateOutreachProspect: (p: OutreachProspect) => void;
   deleteOutreachProspect: (id: string) => void;
 
+  notifications: InAppNotification[];
+  addNotification: (n: InAppNotification) => void;
+  clearNotifications: () => void;
+
   assets: Asset[];
   facilities: Facility[];
   maintenanceRecords: MaintenanceRecord[];
@@ -205,6 +209,14 @@ export function DataProvider({ children }: { children: ReactNode }) {
     try { return JSON.parse(localStorage.getItem('chms_outreach_prospects') ?? '[]'); }
     catch { return []; }
   });
+  const [notifications, setNotifications] = useState<InAppNotification[]>(() => {
+    try { return JSON.parse(localStorage.getItem('chms_notifications') ?? '[]'); }
+    catch { return []; }
+  });
+  useEffect(() => { localStorage.setItem('chms_notifications', JSON.stringify(notifications)); }, [notifications]);
+  const addNotification = (n: InAppNotification) => setNotifications(prev => [n, ...prev].slice(0, 100));
+  const clearNotifications = () => setNotifications([]);
+
   const [assets, setAssets] = useState<Asset[]>(() => {
     try { return JSON.parse(localStorage.getItem('chms_assets') ?? '[]'); }
     catch { return []; }
@@ -571,6 +583,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       outreachActivities, outreachProspects,
       addOutreachActivity, updateOutreachActivity, deleteOutreachActivity,
       addOutreachProspect, updateOutreachProspect, deleteOutreachProspect,
+      notifications, addNotification, clearNotifications,
       assets, facilities, maintenanceRecords,
       addAsset, updateAsset, deleteAsset,
       addFacility, updateFacility, deleteFacility,
