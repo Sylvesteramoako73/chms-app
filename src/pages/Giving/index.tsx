@@ -609,7 +609,7 @@ export default function Giving() {
             </div>
             {campuses.length > 0 && (
               <div className="space-y-1.5">
-                <Label>Campus / Branch</Label>
+                <Label>Branch</Label>
                 <Select
                   value={(form as any).campusId || (selectedCampusId !== 'all' ? selectedCampusId : 'none')}
                   onValueChange={v => setForm(f => ({ ...f, campusId: v === 'none' ? '' : v }))}

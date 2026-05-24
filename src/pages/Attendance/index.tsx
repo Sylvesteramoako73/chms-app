@@ -280,9 +280,9 @@ export default function Attendance() {
             </div>
             {campuses.length > 0 && (
               <div className="space-y-1.5">
-                <Label>Campus / Branch</Label>
+                <Label>Branch</Label>
                 <Select value={logCampusId} onValueChange={setLogCampusId}>
-                  <SelectTrigger><SelectValue placeholder="Select campus" /></SelectTrigger>
+                  <SelectTrigger><SelectValue placeholder="Select branch" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">None</SelectItem>
                     {campuses.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}

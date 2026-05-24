@@ -38,6 +38,7 @@ const navItems = [
 
 const ROLE_BADGE: Record<UserRole, string> = {
   Administrator: 'bg-gold-500/20 text-gold-500',
+  'Branch Pastor': 'bg-purple-500/20 text-purple-400',
   Pastor: 'bg-sage-500/20 text-sage-400',
   'Department Head': 'bg-blue-500/20 text-blue-400',
   'Data Entry': 'bg-navy-700 text-navy-400',
@@ -52,7 +53,7 @@ function SidebarContent({ onClose }: { onClose: () => void }) {
   const { canAccess, role } = useRole();
   const { profile, signOut } = useAuth();
   const { campuses } = useData();
-  const { selectedCampusId, setSelectedCampusId } = useCampus();
+  const { selectedCampusId, setSelectedCampusId, isLocked } = useCampus();
 
   const visibleNav = navItems.filter(item => canAccess(item.path));
   const initials = profile?.name
@@ -80,22 +81,31 @@ function SidebarContent({ onClose }: { onClose: () => void }) {
         </button>
       </div>
 
-      {/* Campus switcher — only visible when 2+ campuses exist */}
+      {/* Branch switcher — visible when 2+ branches exist */}
       {campuses.length > 1 && (
         <div className="px-4 pb-3">
           <div className="relative">
             <Building2 className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-navy-500 pointer-events-none" />
-            <select
-              value={selectedCampusId}
-              onChange={e => setSelectedCampusId(e.target.value)}
-              className="w-full appearance-none bg-navy-800 border border-navy-700 text-navy-200 text-xs rounded-lg pl-8 pr-7 py-2 focus:outline-none focus:ring-1 focus:ring-gold-500/50 cursor-pointer"
-            >
-              <option value="all">All Campuses</option>
-              {campuses.map(c => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
-            <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-navy-500 pointer-events-none" />
+            {isLocked ? (
+              // Branch Pastors see their branch name, cannot switch
+              <div className="w-full bg-navy-800 border border-navy-700 text-navy-200 text-xs rounded-lg pl-8 pr-3 py-2">
+                {campuses.find(c => c.id === selectedCampusId)?.name ?? 'My Branch'}
+              </div>
+            ) : (
+              <>
+                <select
+                  value={selectedCampusId}
+                  onChange={e => setSelectedCampusId(e.target.value)}
+                  className="w-full appearance-none bg-navy-800 border border-navy-700 text-navy-200 text-xs rounded-lg pl-8 pr-7 py-2 focus:outline-none focus:ring-1 focus:ring-gold-500/50 cursor-pointer"
+                >
+                  <option value="all">All Branches</option>
+                  {campuses.map(c => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+                <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-navy-500 pointer-events-none" />
+              </>
+            )}
           </div>
         </div>
       )}

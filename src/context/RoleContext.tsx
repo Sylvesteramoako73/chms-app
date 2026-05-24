@@ -9,6 +9,11 @@ const ROLE_ACCESS: Record<UserRole, string[]> = {
     '/volunteers', '/pledges', '/visitors', '/outreach', '/assets',
     '/workers', '/automation', '/children', '/media', '/cells',
   ],
+  'Branch Pastor': [
+    '/', '/members', '/attendance', '/giving', '/communication',
+    '/reports', '/prayer', '/pastoral', '/volunteers', '/pledges', '/events', '/visitors', '/outreach', '/assets',
+    '/workers', '/children', '/media', '/cells',
+  ],
   Pastor: [
     '/', '/members', '/attendance', '/giving', '/communication',
     '/reports', '/prayer', '/pastoral', '/volunteers', '/pledges', '/events', '/visitors', '/outreach', '/assets',
@@ -46,6 +51,13 @@ export const ROLE_ACTIONS: Record<UserRole, {
     canManageDepartments: true, canSendMessages: true, canManagePledges: true,
     canManageUsers: true, canManageWorkers: true, canManageChildren: true,
     canManageMedia: true, canManageCells: true, canManageAutomation: true,
+  },
+  'Branch Pastor': {
+    canEditMembers: true, canDeleteMembers: false, canViewReports: true,
+    canExportReports: true, canAccessSettings: false, canManageGiving: true,
+    canManageDepartments: false, canSendMessages: true, canManagePledges: true,
+    canManageUsers: false, canManageWorkers: true, canManageChildren: true,
+    canManageMedia: true, canManageCells: false, canManageAutomation: false,
   },
   Pastor: {
     canEditMembers: true, canDeleteMembers: false, canViewReports: true,

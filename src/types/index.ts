@@ -1,4 +1,4 @@
-export type UserRole = 'Administrator' | 'Pastor' | 'Department Head' | 'Data Entry';
+export type UserRole = 'Administrator' | 'Branch Pastor' | 'Pastor' | 'Department Head' | 'Data Entry';
 export type MemberStatus = 'Active' | 'Inactive' | 'New Convert' | 'Visitor';
 export type Gender = 'Male' | 'Female';
 export type MaritalStatus = 'Single' | 'Married' | 'Divorced' | 'Widowed';

@@ -339,9 +339,9 @@ export default function Members() {
             </div>
             {campuses.length > 0 && (
               <div className="space-y-1.5">
-                <Label>Campus / Branch</Label>
+                <Label>Branch</Label>
                 <Select value={form.campusId ?? 'none'} onValueChange={v => set('campusId', v === 'none' ? undefined : v)}>
-                  <SelectTrigger><SelectValue placeholder="Select campus" /></SelectTrigger>
+                  <SelectTrigger><SelectValue placeholder="Select branch" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">None</SelectItem>
                     {campuses.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}

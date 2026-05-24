@@ -28,10 +28,11 @@ const SERVICE_TYPES_DEFAULT = [
 
 const EMPTY_CAMPUS = { name: '', address: '', pastor: '', isMain: false };
 
-const ROLE_OPTIONS: UserRole[] = ['Administrator', 'Pastor', 'Department Head', 'Data Entry'];
+const ROLE_OPTIONS: UserRole[] = ['Administrator', 'Branch Pastor', 'Pastor', 'Department Head', 'Data Entry'];
 
 const ROLE_BADGE: Record<UserRole, string> = {
   Administrator: 'bg-gold-500/10 text-gold-700 dark:text-gold-400 border-gold-300 dark:border-gold-800/40',
+  'Branch Pastor': 'bg-purple-500/10 text-purple-700 dark:text-purple-400 border-purple-300 dark:border-purple-800/40',
   Pastor: 'bg-sage-500/10 text-sage-700 dark:text-sage-400 border-sage-300 dark:border-sage-800/40',
   'Department Head': 'bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-300 dark:border-blue-800/40',
   'Data Entry': 'bg-muted text-muted-foreground border-border',
@@ -45,6 +46,7 @@ export default function Settings() {
   const [updatingRole, setUpdatingRole] = useState<string | null>(null);
   const [addUserOpen, setAddUserOpen] = useState(false);
   const [addUserForm, setAddUserForm] = useState({ name: '', email: '', password: '', role: 'Data Entry' as UserRole });
+  const [addUserBranchId, setAddUserBranchId] = useState('');
   const [addUserLoading, setAddUserLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
@@ -112,17 +114,17 @@ export default function Settings() {
     const data = { name: campusForm.name.trim(), address: campusForm.address.trim() || undefined, pastor: campusForm.pastor.trim() || undefined, isMain: campusForm.isMain };
     if (editingCampus) {
       updateCampus({ ...editingCampus, ...data });
-      toast({ title: 'Campus updated' });
+      toast({ title: 'Branch updated' });
     } else {
       addCampus({ id: `c${Date.now()}`, ...data });
-      toast({ title: 'Campus added' });
+      toast({ title: 'Branch added' });
     }
     setCampusDialogOpen(false);
   };
   const handleDeleteCampus = (c: Campus) => {
     const ok = deleteCampus(c.id);
-    if (!ok) toast({ title: 'Cannot delete', description: 'Members are assigned to this campus.', variant: 'destructive' });
-    else toast({ title: 'Campus deleted' });
+    if (!ok) toast({ title: 'Cannot delete', description: 'Members are assigned to this branch.', variant: 'destructive' });
+    else toast({ title: 'Branch deleted' });
   };
 
   const handleRoleChange = async (userId: string, role: UserRole) => {
@@ -138,12 +140,17 @@ export default function Settings() {
       toast({ title: 'All fields required', variant: 'destructive' });
       return;
     }
+    if (addUserForm.role === 'Branch Pastor' && !addUserBranchId) {
+      toast({ title: 'Branch required', description: 'Please assign a branch for the Branch Pastor.', variant: 'destructive' });
+      return;
+    }
     if (addUserForm.password.length < 6) {
       toast({ title: 'Password too short', description: 'Minimum 6 characters.', variant: 'destructive' });
       return;
     }
     setAddUserLoading(true);
-    const { error } = await createUser(addUserForm.name, addUserForm.email, addUserForm.password, addUserForm.role);
+    const branchId = addUserForm.role === 'Branch Pastor' ? addUserBranchId || undefined : undefined;
+    const { error } = await createUser(addUserForm.name, addUserForm.email, addUserForm.password, addUserForm.role, branchId);
     setAddUserLoading(false);
     if (error) {
       toast({ title: 'Failed to create user', description: error, variant: 'destructive' });
@@ -151,6 +158,7 @@ export default function Settings() {
       toast({ title: 'User created', description: `${addUserForm.name} has been added with ${addUserForm.role} role.` });
       setAddUserOpen(false);
       setAddUserForm({ name: '', email: '', password: '', role: 'Data Entry' });
+      setAddUserBranchId('');
     }
   };
 
@@ -184,7 +192,7 @@ export default function Settings() {
         <TabsList className="mb-6 flex-wrap h-auto gap-1">
           <TabsTrigger value="profile" className="gap-2"><Church className="w-4 h-4" /> Church Profile</TabsTrigger>
           <TabsTrigger value="preferences" className="gap-2"><Cog className="w-4 h-4" /> Preferences</TabsTrigger>
-          <TabsTrigger value="campuses" className="gap-2"><Building2 className="w-4 h-4" /> Campuses</TabsTrigger>
+          <TabsTrigger value="campuses" className="gap-2"><Building2 className="w-4 h-4" /> Branches</TabsTrigger>
           <TabsTrigger value="audit" className="gap-2"><ClipboardList className="w-4 h-4" /> Audit Log</TabsTrigger>
           <TabsTrigger value="roles" className="gap-2"><Shield className="w-4 h-4" /> Roles</TabsTrigger>
           {actions.canManageUsers && (
@@ -400,20 +408,20 @@ export default function Settings() {
           </Card>
         </TabsContent>
 
-        {/* Campuses Tab */}
+        {/* Branches Tab */}
         <TabsContent value="campuses" className="mt-0">
           <Card className="glass border-none shadow-sm">
             <CardHeader>
               <div className="flex items-center justify-between">
                 <div>
-                  <CardTitle className="flex items-center gap-2"><Building2 className="w-5 h-5 text-navy-500" /> Campuses</CardTitle>
-                  <CardDescription>{campuses.length} campus{campuses.length !== 1 ? 'es' : ''} configured.</CardDescription>
+                  <CardTitle className="flex items-center gap-2"><Building2 className="w-5 h-5 text-navy-500" /> Branches</CardTitle>
+                  <CardDescription>{campuses.length} branch{campuses.length !== 1 ? 'es' : ''} configured.</CardDescription>
                 </div>
-                <Button size="sm" onClick={openAddCampus} className="gap-2 bg-white hover:bg-gray-50 text-navy-900 font-medium">Add Campus</Button>
+                <Button size="sm" onClick={openAddCampus} className="gap-2 bg-white hover:bg-gray-50 text-navy-900 font-medium">Add Branch</Button>
               </div>
             </CardHeader>
             <CardContent className="space-y-2">
-              {campuses.length === 0 && <p className="text-sm text-muted-foreground">No campuses yet.</p>}
+              {campuses.length === 0 && <p className="text-sm text-muted-foreground">No branches yet.</p>}
               {campuses.map(c => (
                 <div key={c.id} className="flex items-center justify-between p-3 rounded-lg border border-border/40 bg-muted/10">
                   <div>
@@ -476,7 +484,8 @@ export default function Settings() {
             </CardHeader>
             <CardContent className="space-y-3">
               {([
-                { role: 'Administrator' as UserRole, desc: 'Full access to all modules, settings, user management, and WhatsApp.' },
+                { role: 'Administrator' as UserRole, desc: 'Full access to all branches, modules, settings, and user management.' },
+                { role: 'Branch Pastor' as UserRole, desc: 'Oversees a single branch — members, attendance, giving, communication, reports, prayer, volunteers, and pastoral care for their branch only.' },
                 { role: 'Pastor' as UserRole, desc: 'Members, attendance, giving, communication, reports, prayer, pastoral care, volunteers, pledges.' },
                 { role: 'Department Head' as UserRole, desc: 'Members, attendance, events, prayer requests, and volunteers only.' },
                 { role: 'Data Entry' as UserRole, desc: 'Log attendance and tithes/offerings only. No reports or settings.' },
@@ -623,13 +632,24 @@ export default function Settings() {
             </div>
             <div className="space-y-1.5">
               <Label>Role *</Label>
-              <Select value={addUserForm.role} onValueChange={v => setAddUserForm(f => ({ ...f, role: v as UserRole }))}>
+              <Select value={addUserForm.role} onValueChange={v => { setAddUserForm(f => ({ ...f, role: v as UserRole })); setAddUserBranchId(''); }}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {ROLE_OPTIONS.map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
+            {addUserForm.role === 'Branch Pastor' && (
+              <div className="space-y-1.5">
+                <Label>Assign to Branch *</Label>
+                <Select value={addUserBranchId} onValueChange={setAddUserBranchId}>
+                  <SelectTrigger><SelectValue placeholder="Select branch…" /></SelectTrigger>
+                  <SelectContent>
+                    {campuses.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setAddUserOpen(false)}>Cancel</Button>
@@ -660,16 +680,16 @@ export default function Settings() {
         </DialogContent>
       </Dialog>
 
-      {/* Campus Dialog */}
+      {/* Branch Dialog */}
       <Dialog open={campusDialogOpen} onOpenChange={setCampusDialogOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle className="font-display text-2xl">{editingCampus ? 'Edit Campus' : 'Add Campus'}</DialogTitle>
+            <DialogTitle className="font-display text-2xl">{editingCampus ? 'Edit Branch' : 'Add Branch'}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-1.5">
-              <Label>Campus Name *</Label>
-              <Input placeholder="e.g. North Campus" value={campusForm.name} onChange={e => setCampusForm(f => ({ ...f, name: e.target.value }))} />
+              <Label>Branch Name *</Label>
+              <Input placeholder="e.g. North Branch" value={campusForm.name} onChange={e => setCampusForm(f => ({ ...f, name: e.target.value }))} />
             </div>
             <div className="space-y-1.5">
               <Label>Lead Pastor</Label>
@@ -680,13 +700,13 @@ export default function Settings() {
               <Input placeholder="123 Main St, City" value={campusForm.address} onChange={e => setCampusForm(f => ({ ...f, address: e.target.value }))} />
             </div>
             <div className="flex items-center justify-between p-3 rounded-lg border border-border/40 bg-muted/20">
-              <p className="text-sm font-medium">Main Campus</p>
+              <p className="text-sm font-medium">Main Branch</p>
               <Switch checked={campusForm.isMain} onCheckedChange={v => setCampusForm(f => ({ ...f, isMain: v }))} />
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCampusDialogOpen(false)}>Cancel</Button>
-            <Button onClick={handleSaveCampus} className="bg-white hover:bg-gray-50 text-navy-900 font-medium">{editingCampus ? 'Save Changes' : 'Add Campus'}</Button>
+            <Button onClick={handleSaveCampus} className="bg-white hover:bg-gray-50 text-navy-900 font-medium">{editingCampus ? 'Save Changes' : 'Add Branch'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

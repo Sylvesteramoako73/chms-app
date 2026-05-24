@@ -8,6 +8,7 @@ export interface UserProfile {
   name: string;
   email: string;
   role: UserRole;
+  branchId?: string;
 }
 
 interface AuthContextValue {
@@ -18,8 +19,8 @@ interface AuthContextValue {
   signUp: (name: string, email: string, password: string, role: UserRole) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
   allProfiles: UserProfile[];
-  updateUserRole: (userId: string, role: UserRole) => Promise<{ error: string | null }>;
-  createUser: (name: string, email: string, password: string, role: UserRole) => Promise<{ error: string | null }>;
+  updateUserRole: (userId: string, role: UserRole, branchId?: string) => Promise<{ error: string | null }>;
+  createUser: (name: string, email: string, password: string, role: UserRole, branchId?: string) => Promise<{ error: string | null }>;
   deleteUser: (userId: string) => Promise<{ error: string | null }>;
   refreshProfiles: () => Promise<void>;
 }
@@ -58,13 +59,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('id, name, email, role')
+        .select('id, name, email, role, branch_id')
         .eq('id', currentUser.id)
         .single();
 
       if (!error && data && isValidRole(data.role)) {
-        // Profiles table exists and has a row — use it (admin may have updated the role here)
-        setProfile({ id: data.id, name: data.name, email: data.email, role: data.role as UserRole });
+        setProfile({ id: data.id, name: data.name, email: data.email, role: data.role as UserRole, branchId: data.branch_id ?? undefined });
         return;
       }
     } catch (_) { /* profiles table may not exist yet */ }
@@ -75,8 +75,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const fetchAllProfiles = useCallback(async () => {
     try {
-      const { data } = await supabase.from('profiles').select('id, name, email, role').order('created_at');
-      if (data) setAllProfiles(data.map(r => ({ id: r.id, name: r.name, email: r.email, role: (isValidRole(r.role) ? r.role : 'Data Entry') as UserRole })));
+      const { data } = await supabase.from('profiles').select('id, name, email, role, branch_id').order('created_at');
+      if (data) setAllProfiles(data.map(r => ({ id: r.id, name: r.name, email: r.email, role: (isValidRole(r.role) ? r.role : 'Data Entry') as UserRole, branchId: r.branch_id ?? undefined })));
     } catch (_) { /* profiles table may not exist */ }
   }, []);
 
@@ -180,11 +180,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   // ── Update Role ───────────────────────────────────────────────────────────
-  const updateUserRole = async (userId: string, role: UserRole): Promise<{ error: string | null }> => {
-    // ① Update the profiles table (the app reads from here preferentially)
+  const updateUserRole = async (userId: string, role: UserRole, branchId?: string): Promise<{ error: string | null }> => {
     let profilesError: string | null = null;
     try {
-      const { error } = await supabase.from('profiles').update({ role }).eq('id', userId);
+      const update: Record<string, unknown> = { role };
+      update.branch_id = role === 'Branch Pastor' ? (branchId ?? null) : null;
+      const { error } = await supabase.from('profiles').update(update).eq('id', userId);
       if (error) profilesError = error.message;
     } catch (_) {
       profilesError = 'profiles table not found';
@@ -208,7 +209,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   // ── Create User (admin) ───────────────────────────────────────────────────
-  const createUser = async (name: string, email: string, password: string, role: UserRole): Promise<{ error: string | null }> => {
+  const createUser = async (name: string, email: string, password: string, role: UserRole, branchId?: string): Promise<{ error: string | null }> => {
     // Capture the admin's current session so we can restore it if Supabase
     // auto-signs-in the new user (happens when email confirmation is disabled).
     const { data: { session: adminSession } } = await supabase.auth.getSession();
@@ -224,7 +225,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Mirror to profiles table
     try {
       await supabase.from('profiles').upsert(
-        { id: data.user.id, name: name.trim(), email: email.trim().toLowerCase(), role },
+        { id: data.user.id, name: name.trim(), email: email.trim().toLowerCase(), role, branch_id: role === 'Branch Pastor' ? (branchId ?? null) : null },
         { onConflict: 'id' },
       );
     } catch (_) { /* profiles table may not exist */ }
