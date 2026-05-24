@@ -254,7 +254,13 @@ export function DataProvider({ children }: { children: ReactNode }) {
   // data reloads correctly after a logout → page refresh → login sequence
   // (Supabase RLS returns empty arrays when there is no active session).
   useEffect(() => {
+    // Tracks whether we've already loaded data with a valid auth session.
+    // SIGNED_IN fires on tab focus (Supabase re-validates the session), so we
+    // skip the reload if we already have data to prevent UI flicker/refresh.
+    let hasAuthData = false;
+
     async function loadAll() {
+      const { data: { session } } = await supabase.auth.getSession();
       setLoading(true);
       const [
         { data: m }, { data: d }, { data: sg }, { data: c },
@@ -292,10 +298,12 @@ export function DataProvider({ children }: { children: ReactNode }) {
       setPledgePayments(pp?.map(mapPayment) ?? []);
       setAuditLogs(al?.map(mapAudit) ?? []);
       setLoading(false);
+      if (session) hasAuthData = true;
     }
     loadAll();
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
-      if (event === 'SIGNED_IN') loadAll();
+      // Only reload on genuine first-login, not on tab-focus re-validation
+      if (event === 'SIGNED_IN' && !hasAuthData) loadAll();
     });
     return () => subscription.unsubscribe();
   }, []);
