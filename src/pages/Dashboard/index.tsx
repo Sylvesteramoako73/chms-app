@@ -1,30 +1,42 @@
 import { motion } from 'framer-motion';
 import { useData } from '@/context/DataContext';
+import { useCampus } from '@/context/CampusContext';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Users, TrendingUp, Calendar, Coins, Cake, Heart } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 import { format, subMonths, isAfter, subDays, addDays, getMonth, getDate } from 'date-fns';
 
 export default function Dashboard() {
-  const { members, attendance, giving, events, departments } = useData();
+  const { members, attendance, giving, events, departments, campuses } = useData();
+  const { selectedCampusId } = useCampus();
+
+  // Apply campus filter globally
+  const filteredMembers = members.filter(m => selectedCampusId === 'all' || m.campusId === selectedCampusId);
+  const filteredAttendance = attendance.filter(a => selectedCampusId === 'all' || a.campusId === selectedCampusId);
+  const filteredGiving = giving.filter(g => selectedCampusId === 'all' || g.campusId === selectedCampusId);
+  const filteredEvents = events.filter(e => selectedCampusId === 'all' || e.campusId === selectedCampusId);
+
+  const campusLabel = selectedCampusId === 'all'
+    ? 'All Campuses'
+    : campuses.find(c => c.id === selectedCampusId)?.name ?? '';
 
   // Metrics calculation
-  const totalMembers = members.length;
-  
-  const oneMonthAgo = subMonths(new Date(), 1);
-  const newMembersThisMonth = members.filter(m => isAfter(new Date(m.joinDate), oneMonthAgo)).length;
+  const totalMembers = filteredMembers.length;
 
-  const thisMonthGiving = giving
+  const oneMonthAgo = subMonths(new Date(), 1);
+  const newMembersThisMonth = filteredMembers.filter(m => isAfter(new Date(m.joinDate), oneMonthAgo)).length;
+
+  const thisMonthGiving = filteredGiving
     .filter(g => isAfter(new Date(g.date), oneMonthAgo))
     .reduce((sum, record) => sum + record.amount, 0);
 
-  const upcomingEvents = [...events]
+  const upcomingEvents = [...filteredEvents]
     .filter(e => isAfter(new Date(e.date), subDays(new Date(), 1)))
     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
     .slice(0, 3);
 
   // Chart data
-  const attendanceData = [...attendance]
+  const attendanceData = [...filteredAttendance]
     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
     .slice(-4)
     .map(a => ({
@@ -44,12 +56,12 @@ export default function Dashboard() {
     const thisYear = new Date(today.getFullYear(), getMonth(d), getDate(d));
     return thisYear >= today && thisYear <= inSevenDays;
   };
-  const upcomingBirthdays = members.filter(m => m.dateOfBirth && isWithinNext7Days(m.dateOfBirth));
-  const upcomingAnniversaries = members.filter(m => m.joinDate && isWithinNext7Days(m.joinDate) && new Date(m.joinDate).getFullYear() < today.getFullYear());
-  
+  const upcomingBirthdays = filteredMembers.filter(m => m.dateOfBirth && isWithinNext7Days(m.dateOfBirth));
+  const upcomingAnniversaries = filteredMembers.filter(m => m.joinDate && isWithinNext7Days(m.joinDate) && new Date(m.joinDate).getFullYear() < today.getFullYear());
+
   const departmentData = departments.map(d => ({
     name: d.name,
-    value: members.filter(m => m.departmentId === d.id).length
+    value: filteredMembers.filter(m => m.departmentId === d.id).length
   })).filter(d => d.value > 0);
 
   return (
@@ -61,7 +73,9 @@ export default function Dashboard() {
     >
       <div>
         <h1 className="text-4xl font-display font-bold text-navy-900 dark:text-white mb-2">Dashboard</h1>
-        <p className="text-navy-600 dark:text-navy-300">Overview of your church's health and activity.</p>
+        <p className="text-navy-600 dark:text-navy-300">
+          {campusLabel === 'All Campuses' ? "Overview of your church's health and activity." : `Showing data for ${campusLabel}.`}
+        </p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">

@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { useData } from '@/context/DataContext';
+import { useCampus } from '@/context/CampusContext';
 import type { ServiceType, AttendanceRecord } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -20,7 +21,8 @@ const SERVICE_TYPES: ServiceType[] = [
 ];
 
 export default function Attendance() {
-  const { attendance, members, addAttendance } = useData();
+  const { attendance, members, campuses, addAttendance } = useData();
+  const { selectedCampusId } = useCampus();
   const { toast } = useToast();
 
   const [serviceFilter, setServiceFilter] = useState<string>('all');
@@ -31,6 +33,7 @@ export default function Attendance() {
   // New attendance form state
   const [logService, setLogService] = useState<ServiceType>('Sunday First Service');
   const [logDate, setLogDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+  const [logCampusId, setLogCampusId] = useState<string>('none');
   const [logVisitors, setLogVisitors] = useState('0');
   const [presentIds, setPresentIds] = useState<Set<string>>(new Set());
   const [logMale, setLogMale] = useState('0');
@@ -39,16 +42,20 @@ export default function Attendance() {
 
   const quickTotal = (parseInt(logMale) || 0) + (parseInt(logFemale) || 0) + (parseInt(logChildren) || 0);
 
-  const filteredRecords = attendance
+  const campusFiltered = attendance.filter(a =>
+    selectedCampusId === 'all' || a.campusId === selectedCampusId
+  );
+
+  const filteredRecords = campusFiltered
     .filter(a => serviceFilter === 'all' || a.serviceType === serviceFilter)
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
-  const totalServices = attendance.length;
+  const totalServices = campusFiltered.length;
   const getTotal = (a: AttendanceRecord) => (a.quickCount ?? a.presentMemberIds.length) + a.visitorsCount;
   const avgAttendance = totalServices > 0
-    ? Math.round(attendance.reduce((s, a) => s + getTotal(a), 0) / totalServices)
+    ? Math.round(campusFiltered.reduce((s, a) => s + getTotal(a), 0) / totalServices)
     : 0;
-  const highestAttendance = attendance.reduce((max, a) => {
+  const highestAttendance = campusFiltered.reduce((max, a) => {
     const t = getTotal(a);
     return t > max ? t : max;
   }, 0);
@@ -88,6 +95,7 @@ export default function Attendance() {
   const openDialog = () => {
     setLogService('Sunday First Service');
     setLogDate(format(new Date(), 'yyyy-MM-dd'));
+    setLogCampusId(selectedCampusId !== 'all' ? selectedCampusId : 'none');
     setLogVisitors('0');
     setLogMale('0');
     setLogFemale('0');
@@ -103,6 +111,7 @@ export default function Attendance() {
       id: `a${Date.now()}`,
       serviceType: logService,
       date: logDate,
+      campusId: logCampusId !== 'none' ? logCampusId : undefined,
       presentMemberIds: isQuick ? [] : Array.from(presentIds),
       visitorsCount: parseInt(logVisitors) || 0,
       ...(isQuick && {
@@ -269,6 +278,18 @@ export default function Attendance() {
                 <Input type="date" value={logDate} onChange={e => setLogDate(e.target.value)} />
               </div>
             </div>
+            {campuses.length > 0 && (
+              <div className="space-y-1.5">
+                <Label>Campus / Branch</Label>
+                <Select value={logCampusId} onValueChange={setLogCampusId}>
+                  <SelectTrigger><SelectValue placeholder="Select campus" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None</SelectItem>
+                    {campuses.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
 
             {/* Mode toggle */}
             <div className="flex rounded-lg border border-border/50 overflow-hidden">

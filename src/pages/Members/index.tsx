@@ -2,6 +2,7 @@ import { useState, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { useData } from '@/context/DataContext';
+import { useCampus } from '@/context/CampusContext';
 import type { Member, MemberStatus, Gender, MaritalStatus } from '@/types';
 import { getMemberAbsenceStreak } from '@/utils/attendanceUtils';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
@@ -38,7 +39,8 @@ const EMPTY_FORM: Omit<Member, 'id'> = {
 };
 
 export default function Members() {
-  const { members, departments, attendance, addMember, updateMember, deleteMember, importMembers } = useData();
+  const { members, departments, campuses, attendance, addMember, updateMember, deleteMember, importMembers } = useData();
+  const { selectedCampusId } = useCampus();
   const { toast } = useToast();
   const navigate = useNavigate();
   const csvInputRef = useRef<HTMLInputElement>(null);
@@ -57,7 +59,8 @@ export default function Members() {
       m.phone.includes(search);
     const matchStatus = statusFilter === 'all' || m.status === statusFilter;
     const matchDept = deptFilter === 'all' || m.departmentId === deptFilter;
-    return matchSearch && matchStatus && matchDept;
+    const matchCampus = selectedCampusId === 'all' || m.campusId === selectedCampusId;
+    return matchSearch && matchStatus && matchDept && matchCampus;
   });
 
   const openAdd = () => {
@@ -334,6 +337,18 @@ export default function Members() {
                 </SelectContent>
               </Select>
             </div>
+            {campuses.length > 0 && (
+              <div className="space-y-1.5">
+                <Label>Campus / Branch</Label>
+                <Select value={form.campusId ?? 'none'} onValueChange={v => set('campusId', v === 'none' ? undefined : v)}>
+                  <SelectTrigger><SelectValue placeholder="Select campus" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None</SelectItem>
+                    {campuses.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <div className="space-y-1.5">
               <Label>Status</Label>
               <Select value={form.status} onValueChange={v => set('status', v as MemberStatus)}>

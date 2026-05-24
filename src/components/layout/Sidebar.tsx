@@ -4,11 +4,13 @@ import {
   LayoutDashboard, Users, CalendarCheck, Coins,
   CalendarDays, Settings, MessageSquare, PieChart, Building2, X,
   Heart, HeartHandshake, ClipboardList, Target, LogOut, Church, UserPlus,
-  UserCheck, BellRing, Baby, PlayCircle, Network, Megaphone, Boxes,
+  UserCheck, BellRing, Baby, PlayCircle, Network, Megaphone, Boxes, ChevronDown,
 } from 'lucide-react';
 import { cn } from '@/utils';
 import { useRole, type UserRole } from '@/context/RoleContext';
 import { useAuth } from '@/context/AuthContext';
+import { useData } from '@/context/DataContext';
+import { useCampus } from '@/context/CampusContext';
 
 const navItems = [
   { name: 'Dashboard', path: '/', icon: LayoutDashboard },
@@ -49,6 +51,8 @@ interface SidebarProps {
 function SidebarContent({ onClose }: { onClose: () => void }) {
   const { canAccess, role } = useRole();
   const { profile, signOut } = useAuth();
+  const { campuses } = useData();
+  const { selectedCampusId, setSelectedCampusId } = useCampus();
 
   const visibleNav = navItems.filter(item => canAccess(item.path));
   const initials = profile?.name
@@ -75,6 +79,26 @@ function SidebarContent({ onClose }: { onClose: () => void }) {
           <X className="w-5 h-5" />
         </button>
       </div>
+
+      {/* Campus switcher — only visible when 2+ campuses exist */}
+      {campuses.length > 1 && (
+        <div className="px-4 pb-3">
+          <div className="relative">
+            <Building2 className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-navy-500 pointer-events-none" />
+            <select
+              value={selectedCampusId}
+              onChange={e => setSelectedCampusId(e.target.value)}
+              className="w-full appearance-none bg-navy-800 border border-navy-700 text-navy-200 text-xs rounded-lg pl-8 pr-7 py-2 focus:outline-none focus:ring-1 focus:ring-gold-500/50 cursor-pointer"
+            >
+              <option value="all">All Campuses</option>
+              {campuses.map(c => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+            <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-navy-500 pointer-events-none" />
+          </div>
+        </div>
+      )}
 
       {/* Nav */}
       <nav className="flex-1 px-4 space-y-0.5 overflow-y-auto">

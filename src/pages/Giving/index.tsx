@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { useData } from '@/context/DataContext';
+import { useCampus } from '@/context/CampusContext';
 import type { GivingRecord, GivingType, PaymentMethod, Member } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -30,7 +31,8 @@ const EMPTY_FORM = {
 };
 
 export default function Giving() {
-  const { giving, members, addGiving, deleteGiving } = useData();
+  const { giving, members, campuses, addGiving, deleteGiving } = useData();
+  const { selectedCampusId } = useCampus();
   const { toast } = useToast();
 
   const [search, setSearch] = useState('');
@@ -41,8 +43,12 @@ export default function Giving() {
   const [memberDetailOpen, setMemberDetailOpen] = useState(false);
   const [selectedMemberGiving, setSelectedMemberGiving] = useState<{ member: Member | null; memberId: string; records: GivingRecord[] } | null>(null);
 
+  const campusGiving = giving.filter(g =>
+    selectedCampusId === 'all' || g.campusId === selectedCampusId
+  );
+
   const thisMonth = new Date();
-  const thisMonthRecords = giving.filter(g => isSameMonth(parseISO(g.date), thisMonth));
+  const thisMonthRecords = campusGiving.filter(g => isSameMonth(parseISO(g.date), thisMonth));
   const totalThisMonth = thisMonthRecords.reduce((s, g) => s + g.amount, 0);
   const tithesThisMonth = thisMonthRecords.filter(g => g.type === 'Tithe').reduce((s, g) => s + g.amount, 0);
   const offeringsThisMonth = thisMonthRecords.filter(g => g.type === 'Offering').reduce((s, g) => s + g.amount, 0);
@@ -52,7 +58,7 @@ export default function Giving() {
     return months.map(month => {
       const start = startOfMonth(month);
       const end = endOfMonth(month);
-      const recs = giving.filter(g => { const d = new Date(g.date); return d >= start && d <= end; });
+      const recs = campusGiving.filter(g => { const d = new Date(g.date); return d >= start && d <= end; });
       return {
         name: format(month, 'MMM'),
         Tithes: recs.filter(g => g.type === 'Tithe').reduce((s, g) => s + g.amount, 0),
@@ -66,7 +72,7 @@ export default function Giving() {
     const [y, m] = memberGivingMonth.split('-').map(Number);
     const target = new Date(y, m - 1, 1);
     const map = new Map<string, { memberId: string; total: number; tithe: number; offering: number; other: number; records: GivingRecord[] }>();
-    giving.forEach(g => {
+    campusGiving.forEach(g => {
       if (!isSameMonth(parseISO(g.date), target)) return;
       const key = g.memberId || '__anonymous__';
       if (!map.has(key)) map.set(key, { memberId: key, total: 0, tithe: 0, offering: 0, other: 0, records: [] });
@@ -80,7 +86,7 @@ export default function Giving() {
     return Array.from(map.values()).sort((a, b) => b.total - a.total);
   }, [giving, memberGivingMonth]);
 
-  const filtered = giving
+  const filtered = campusGiving
     .filter(g => {
       const member = members.find(m => m.id === g.memberId);
       const name = member ? `${member.firstName} ${member.lastName}` : 'anonymous';
@@ -105,6 +111,7 @@ export default function Giving() {
       amount: amt,
       type: form.type,
       paymentMethod: form.paymentMethod,
+      campusId: (form as any).campusId || (selectedCampusId !== 'all' ? selectedCampusId : undefined),
       notes: form.notes || undefined,
     });
     toast({ title: 'Offering recorded', description: `₵${amt.toLocaleString()} ${form.type} has been logged.` });
@@ -600,6 +607,21 @@ export default function Giving() {
                 </Select>
               </div>
             </div>
+            {campuses.length > 0 && (
+              <div className="space-y-1.5">
+                <Label>Campus / Branch</Label>
+                <Select
+                  value={(form as any).campusId || (selectedCampusId !== 'all' ? selectedCampusId : 'none')}
+                  onValueChange={v => setForm(f => ({ ...f, campusId: v === 'none' ? '' : v }))}
+                >
+                  <SelectTrigger><SelectValue placeholder="Select campus" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None</SelectItem>
+                    {campuses.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <div className="space-y-1.5">
               <Label>Notes</Label>
               <Input placeholder="Optional notes…" value={form.notes} onChange={e => set('notes', e.target.value)} />

@@ -6,6 +6,7 @@ import './index.css'
 import { AuthProvider } from './context/AuthContext'
 import { DataProvider } from './context/DataContext'
 import { RoleProvider } from './context/RoleContext'
+import { CampusProvider } from './context/CampusContext'
 import { ErrorBoundary } from './components/ErrorBoundary'
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
@@ -15,7 +16,9 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
         <AuthProvider>
           <RoleProvider>
             <DataProvider>
-              <App />
+              <CampusProvider>
+                <App />
+              </CampusProvider>
             </DataProvider>
           </RoleProvider>
         </AuthProvider>
