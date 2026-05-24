@@ -27,7 +27,7 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-const VALID_ROLES: UserRole[] = ['Administrator', 'Pastor', 'Department Head', 'Data Entry'];
+const VALID_ROLES: UserRole[] = ['Administrator', 'Branch Pastor', 'Pastor', 'Department Head', 'Data Entry'];
 const isValidRole = (v: unknown): v is UserRole => VALID_ROLES.includes(v as UserRole);
 
 /** Build a UserProfile from a Supabase User object using user_metadata as the source of truth. */
