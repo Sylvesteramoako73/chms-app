@@ -65,11 +65,16 @@ export default function Communication() {
   const [subject, setSubject] = useState('');
   const [message, setMessage] = useState('');
   const [whatsappNumber, setWhatsappNumber] = useState('');
+  const [customEmails, setCustomEmails] = useState('');
   const [history, setHistory] = useState<Message[]>(INITIAL_HISTORY);
 
   const getRecipientLabel = (val: string) => {
     if (val === 'all') return 'All Members';
     if (val === 'active') return 'Active Members';
+    if (val === 'custom') {
+      const count = customEmails.split(',').map(e => e.trim()).filter(Boolean).length;
+      return count > 0 ? `${count} custom email${count !== 1 ? 's' : ''}` : 'Custom Email(s)';
+    }
     const dept = departments.find(d => `dept_${d.id}` === val);
     return dept ? `${dept.name} Dept` : val;
   };
@@ -77,6 +82,7 @@ export default function Communication() {
   const getRecipientCount = (val: string) => {
     if (val === 'all') return members.length;
     if (val === 'active') return members.filter(m => m.status === 'Active').length;
+    if (val === 'custom') return customEmails.split(',').map(e => e.trim()).filter(Boolean).length;
     const deptId = val.replace('dept_', '');
     return members.filter(m => m.departmentId === deptId).length;
   };
@@ -166,25 +172,41 @@ export default function Communication() {
       toast({ title: 'Email not configured', description: 'Go to Settings → Preferences and add your EmailJS credentials.', variant: 'destructive' });
       return false;
     }
-    let group = members;
-    if (recipient === 'active') group = members.filter(m => m.status === 'Active');
-    else if (recipient.startsWith('dept_')) {
-      const deptId = recipient.replace('dept_', '');
-      group = members.filter(m => m.departmentId === deptId);
+
+    const churchName = JSON.parse(localStorage.getItem('chms_church_name') ?? '"ChurchCare"');
+
+    // Build list of { name, email } targets
+    type EmailTarget = { name: string; email: string };
+    let targets: EmailTarget[] = [];
+
+    if (recipient === 'custom') {
+      const parsed = customEmails.split(',').map(e => e.trim()).filter(e => e.includes('@'));
+      if (parsed.length === 0) {
+        toast({ title: 'No valid emails', description: 'Enter at least one valid email address.', variant: 'destructive' });
+        return false;
+      }
+      targets = parsed.map(email => ({ name: email.split('@')[0], email }));
+    } else {
+      let group = members;
+      if (recipient === 'active') group = members.filter(m => m.status === 'Active');
+      else if (recipient.startsWith('dept_')) {
+        const deptId = recipient.replace('dept_', '');
+        group = members.filter(m => m.departmentId === deptId);
+      }
+      targets = group.filter(m => m.email).map(m => ({ name: `${m.firstName} ${m.lastName}`, email: m.email! }));
+      if (targets.length === 0) {
+        toast({ title: 'No email addresses', description: 'None of the selected recipients have an email address on file.', variant: 'destructive' });
+        return false;
+      }
     }
-    const targets = group.filter(m => m.email);
-    if (targets.length === 0) {
-      toast({ title: 'No email addresses', description: 'None of the selected recipients have an email address on file.', variant: 'destructive' });
-      return false;
-    }
+
     setWaSending(true);
     let sent = 0; let failed = 0;
-    const churchName = JSON.parse(localStorage.getItem('chms_church_name') ?? '"ChurchCare"');
-    await Promise.allSettled(targets.map(async m => {
+    await Promise.allSettled(targets.map(async t => {
       try {
         await emailjs.send(ejs.serviceId, ejs.templateId, {
-          to_name: `${m.firstName} ${m.lastName}`,
-          to_email: m.email,
+          to_name: t.name,
+          to_email: t.email,
           subject: subjectLine,
           message: text,
           from_name: churchName,
@@ -287,6 +309,7 @@ export default function Communication() {
     setSubject('');
     setMessage('');
     setWhatsappNumber('');
+    setCustomEmails('');
   };
 
   return (
@@ -327,7 +350,7 @@ export default function Communication() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label>To</Label>
-                <Select value={recipient} onValueChange={setRecipient}>
+                <Select value={recipient} onValueChange={v => { setRecipient(v); if (v !== 'custom') setCustomEmails(''); }}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All Members ({members.length})</SelectItem>
@@ -335,8 +358,22 @@ export default function Communication() {
                     {departments.map(d => (
                       <SelectItem key={d.id} value={`dept_${d.id}`}>{d.name} ({members.filter(m => m.departmentId === d.id).length})</SelectItem>
                     ))}
+                    <SelectItem value="custom">Custom Email(s)…</SelectItem>
                   </SelectContent>
                 </Select>
+                {recipient === 'custom' && (
+                  <div className="space-y-1">
+                    <Input
+                      placeholder="john@example.com, jane@example.com"
+                      value={customEmails}
+                      onChange={e => setCustomEmails(e.target.value)}
+                      className="text-sm"
+                    />
+                    <p className="text-[11px] text-muted-foreground">
+                      {customEmails.split(',').map(e => e.trim()).filter(e => e.includes('@')).length} valid address{customEmails.split(',').map(e => e.trim()).filter(e => e.includes('@')).length !== 1 ? 'es' : ''} · separate multiple with commas
+                    </p>
+                  </div>
+                )}
               </div>
               <div className="space-y-1.5">
                 <Label>Channel</Label>
