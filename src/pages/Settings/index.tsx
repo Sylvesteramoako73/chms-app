@@ -594,16 +594,11 @@ export default function Settings() {
                 <MessageCircle className="w-5 h-5 text-green-500" /> WhatsApp Integration
               </CardTitle>
               <CardDescription>
-                Scan a QR code to link your WhatsApp account. Once connected, send messages directly from the Communication page.
+                Connect your Meta WhatsApp Business account. Once configured, messages from Communication and Task Assignment use this account.
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="mb-4 p-3 rounded-lg bg-amber-500/10 border border-amber-200 dark:border-amber-800/40 text-xs text-amber-700 dark:text-amber-400">
-                <strong>Setup required:</strong> The WhatsApp server must be running separately.
-                Open a second terminal and run: <code className="bg-black/10 px-1 rounded">npm run server:install</code> (once),
-                then <code className="bg-black/10 px-1 rounded">npm run server</code>.
-              </div>
-              <WhatsAppConnect sessionId={profile?.id} />
+              <WhatsAppConnect userId={profile?.id} />
             </CardContent>
           </Card>
         </TabsContent>

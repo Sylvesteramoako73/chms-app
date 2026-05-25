@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { motion } from 'framer-motion';
 import emailjs from '@emailjs/browser';
 import { useData } from '@/context/DataContext';
@@ -14,7 +14,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { Send, Clock, Mail, MessageSquare, Megaphone, CheckCircle, Loader2, AlertCircle, Wifi } from 'lucide-react';
 import { format, subDays } from 'date-fns';
-import { API_BASE } from '@/lib/api';
+import { getWACredentials, sendWABulk } from '@/lib/whatsapp';
 
 // WhatsApp icon as inline SVG to avoid extra dependencies
 function WhatsAppIcon({ className }: { className?: string }) {
@@ -98,14 +98,7 @@ export default function Communication() {
   };
 
   const [waSending, setWaSending] = useState(false);
-  const [waStatus, setWaStatus] = useState<'unknown' | 'connected' | 'disconnected'>('unknown');
-
-  useEffect(() => {
-    fetch(`${API_BASE}/api/whatsapp/status?sessionId=${encodeURIComponent(profile?.id ?? 'default')}`)
-      .then(r => r.json())
-      .then(d => setWaStatus(d.status === 'connected' ? 'connected' : 'disconnected'))
-      .catch(() => setWaStatus('disconnected'));
-  }, []);
+  const waStatus = profile?.id ? (getWACredentials(profile.id) ? 'connected' : 'disconnected') : 'disconnected';
 
   const sendViaSMS = async (phones: string[], text: string) => {
     if (phones.length === 0) {
@@ -228,24 +221,18 @@ export default function Communication() {
       toast({ title: 'No phone numbers', description: 'None of the selected recipients have a phone number.', variant: 'destructive' });
       return false;
     }
+    const creds = profile?.id ? getWACredentials(profile.id) : null;
+    if (!creds) {
+      toast({ title: 'WhatsApp not configured', description: 'Go to Settings → WhatsApp and enter your API credentials.', variant: 'destructive' });
+      return false;
+    }
     setWaSending(true);
     try {
-      const res = await fetch(`${API_BASE}/api/whatsapp/send-bulk`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId: profile?.id ?? 'default', numbers: phones, message: text }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? 'Send failed');
-      toast({ title: 'WhatsApp messages sent', description: `${data.sent} delivered, ${data.failed} failed.` });
+      const { sent, failed } = await sendWABulk(creds, phones, text);
+      toast({ title: 'WhatsApp messages sent', description: `${sent} delivered, ${failed} failed.` });
       return true;
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Unknown error';
-      if (msg.includes('not connected')) {
-        toast({ title: 'WhatsApp not connected', description: 'Go to Settings → WhatsApp to scan the QR code first.', variant: 'destructive' });
-      } else {
-        toast({ title: 'Send failed', description: msg, variant: 'destructive' });
-      }
+      toast({ title: 'Send failed', description: err instanceof Error ? err.message : 'Unknown error', variant: 'destructive' });
       return false;
     } finally {
       setWaSending(false);

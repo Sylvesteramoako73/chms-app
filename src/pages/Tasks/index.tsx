@@ -21,7 +21,7 @@ import {
   MessageCircle, Smartphone, User, ChevronDown, Send,
 } from 'lucide-react';
 import { cn } from '@/utils';
-import { API_BASE } from '@/lib/api';
+import { getWACredentials, sendWAMessage, sendWABulk } from '@/lib/whatsapp';
 
 // ── Role assignment hierarchy ──────────────────────────────────────────────
 const ASSIGNABLE_ROLES: Record<UserRole, UserRole[]> = {
@@ -249,23 +249,17 @@ export default function Tasks() {
     const phone = task.assignedToPhone.replace(/\D/g, '');
 
     if (task.notificationChannel === 'WhatsApp') {
+      const creds = profile?.id ? getWACredentials(profile.id) : null;
+      if (!creds) {
+        toast({ title: 'WhatsApp not configured', description: 'Go to Settings → WhatsApp and enter your API credentials.', variant: 'destructive' });
+        return;
+      }
       try {
-        const sessionId = profile?.id ?? 'default';
-        const statusRes = await fetch(`${API_BASE}/api/whatsapp/status?sessionId=${encodeURIComponent(sessionId)}`);
-        const { status } = await statusRes.json() as { status: string };
-        if (status !== 'connected') {
-          toast({ title: 'WhatsApp not connected', description: 'Connect your WhatsApp account on the WhatsApp page first.', variant: 'destructive' });
-          return;
-        }
-        const res = await fetch(`${API_BASE}/api/whatsapp/send`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ sessionId, number: phone, message }),
-        });
-        if (!res.ok) throw new Error('Send failed');
+        const result = await sendWAMessage(creds, phone, message);
+        if (!result.ok) throw new Error(result.error);
         toast({ title: 'WhatsApp sent', description: `Message delivered to ${task.assignedToName}` });
-      } catch {
-        toast({ title: 'WhatsApp send failed', description: 'Check that the WhatsApp server is running.', variant: 'destructive' });
+      } catch (err) {
+        toast({ title: 'WhatsApp send failed', description: err instanceof Error ? err.message : 'Unknown error', variant: 'destructive' });
       }
     } else {
       let smsSettings = { apiKey: '', senderId: 'ChurchCare' };
@@ -303,22 +297,16 @@ export default function Tasks() {
     if (clean.length === 0) return;
 
     if (channel === 'WhatsApp') {
+      const creds = profile?.id ? getWACredentials(profile.id) : null;
+      if (!creds) {
+        toast({ title: 'WhatsApp not configured', description: 'Go to Settings → WhatsApp and enter your API credentials.', variant: 'destructive' });
+        return;
+      }
       try {
-        const sessionId = profile?.id ?? 'default';
-        const statusRes = await fetch(`${API_BASE}/api/whatsapp/status?sessionId=${encodeURIComponent(sessionId)}`);
-        const { status } = await statusRes.json() as { status: string };
-        if (status !== 'connected') {
-          toast({ title: 'WhatsApp not connected', description: 'Connect your WhatsApp account on the WhatsApp page first.', variant: 'destructive' });
-          return;
-        }
-        await fetch(`${API_BASE}/api/whatsapp/send-bulk`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ sessionId, numbers: clean, message }),
-        });
-        toast({ title: 'WhatsApp sent', description: `Message sent to ${label}` });
-      } catch {
-        toast({ title: 'WhatsApp send failed', description: 'Check that the WhatsApp server is running.', variant: 'destructive' });
+        const { sent, failed } = await sendWABulk(creds, clean, message);
+        toast({ title: 'WhatsApp sent', description: `${sent} sent to ${label}${failed ? `, ${failed} failed` : ''}` });
+      } catch (err) {
+        toast({ title: 'WhatsApp send failed', description: err instanceof Error ? err.message : 'Unknown error', variant: 'destructive' });
       }
     } else {
       let smsSettings = { apiKey: '', senderId: 'ChurchCare' };
