@@ -7,7 +7,7 @@ const ROLE_ACCESS: Record<UserRole, string[]> = {
     '/', '/members', '/attendance', '/giving', '/events', '/departments',
     '/communication', '/reports', '/settings', '/prayer', '/pastoral',
     '/volunteers', '/pledges', '/visitors', '/outreach', '/assets',
-    '/workers', '/automation', '/children', '/media', '/cells', '/tasks', '/whatsapp',
+    '/workers', '/automation', '/children', '/media', '/cells', '/tasks',
   ],
   'Branch Pastor': [
     '/', '/members', '/attendance', '/giving', '/communication',
