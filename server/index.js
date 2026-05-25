@@ -1,24 +1,24 @@
 /**
  * ChurchCare WhatsApp + SMS Gateway Server
  *
- * Uses @whiskeysockets/baileys for WhatsApp (QR scan).
- * Uses mNotify (https://mnotify.com) for bulk SMS.
+ * Supports multiple independent WhatsApp sessions, one per user (sessionId = Supabase user ID).
  *
  * Endpoints:
- *   GET  /api/whatsapp/events     — SSE stream (QR codes & status updates)
- *   GET  /api/whatsapp/status     — Current connection status
- *   POST /api/whatsapp/connect    — Start connection / show QR
- *   POST /api/whatsapp/disconnect — Logout and clear session
- *   POST /api/whatsapp/send       — Send a single WA message { number, message }
- *   POST /api/whatsapp/send-bulk  — Send WA to many { numbers[], message }
- *   POST /api/sms/send-bulk       — Send SMS via mNotify { numbers[], message, senderId? }
- *   GET  /api/sms/balance         — Check mNotify SMS credit balance
+ *   GET  /api/whatsapp/events?sessionId=   — SSE stream for one session
+ *   GET  /api/whatsapp/status?sessionId=   — Status of one session
+ *   POST /api/whatsapp/connect             — { sessionId } start / show QR
+ *   POST /api/whatsapp/disconnect          — { sessionId } logout & clear
+ *   POST /api/whatsapp/send               — { sessionId, number, message }
+ *   POST /api/whatsapp/send-bulk          — { sessionId, numbers[], message }
+ *   POST /api/sms/send-bulk               — { numbers[], message, senderId? }
+ *   GET  /api/sms/balance                 — check mNotify balance
  */
 
 import express from 'express';
 import cors from 'cors';
 import qrcode from 'qrcode';
-import { existsSync, rmSync } from 'fs';
+import { existsSync, rmSync, readdirSync, mkdirSync } from 'fs';
+import path from 'path';
 import makeWASocket, {
   useMultiFileAuthState,
   DisconnectReason,
@@ -26,20 +26,19 @@ import makeWASocket, {
 } from '@whiskeysockets/baileys';
 import pino from 'pino';
 
-const SESSION_DIR = './session';
+const SESSIONS_BASE = './sessions';
 const PORT = process.env.PORT || 3001;
+const DEFAULT_SESSION = 'default';
 
 // ── mNotify SMS config ────────────────────────────────────────────────────────
-const MNOTIFY_API_KEY = process.env.MNOTIFY_API_KEY || 'nC6pJx6aV7YMll0tF94y3SNDt';
-const MNOTIFY_BASE    = 'https://apps.mnotify.net/smsapi';
+const MNOTIFY_API_KEY = process.env.MNOTIFY_API_KEY || '';
 const SMS_SENDER_ID   = process.env.SMS_SENDER_ID || 'ChurchCare';
 
-/** Normalise a phone number to the format mNotify expects: 233XXXXXXXXX */
 function normaliseMsisdn(raw) {
-  let n = raw.replace(/\D/g, '');       // strip non-digits
+  let n = raw.replace(/\D/g, '');
   if (n.startsWith('00')) n = n.slice(2);
-  if (n.startsWith('0')) n = '233' + n.slice(1);  // local GH format 0XXXXXXXXX
-  if (!n.startsWith('233')) n = '233' + n;         // bare 9-digit number
+  if (n.startsWith('0'))  n = '233' + n.slice(1);
+  if (!n.startsWith('233')) n = '233' + n;
   return n;
 }
 
@@ -47,56 +46,77 @@ const app = express();
 app.use(cors({ origin: '*' }));
 app.use(express.json());
 
-// Suppress Baileys internal logs — we do our own logging
 const logger = pino({ level: 'silent' });
 
-// ---------- State ----------
-let waSocket = null;
-let status = 'disconnected'; // 'disconnected' | 'connecting' | 'qr' | 'connected'
-let currentQR = null;        // base64 data URL of latest QR code
-let connectedPhone = null;   // phone number once connected
-const sseClients = new Set();
+// ── Per-session state ─────────────────────────────────────────────────────────
+// Map<sessionId, { socket, status, qr, phone, sseClients: Set }>
+const sessions = new Map();
 
-// ---------- SSE helpers ----------
-function broadcast(payload) {
+function sessionDir(sessionId) {
+  return path.join(SESSIONS_BASE, sessionId);
+}
+
+function getOrCreate(sessionId) {
+  if (!sessions.has(sessionId)) {
+    sessions.set(sessionId, {
+      socket: null,
+      status: 'disconnected',
+      qr: null,
+      phone: null,
+      sseClients: new Set(),
+    });
+  }
+  return sessions.get(sessionId);
+}
+
+function broadcast(sessionId, payload) {
+  const s = sessions.get(sessionId);
+  if (!s) return;
   const data = `data: ${JSON.stringify(payload)}\n\n`;
-  sseClients.forEach(res => res.write(data));
+  s.sseClients.forEach(res => res.write(data));
 }
 
-function sendCurrentState(res) {
-  res.write(`data: ${JSON.stringify({ type: 'state', status, qr: currentQR, phone: connectedPhone })}\n\n`);
-}
-
-// ---------- SSE endpoint ----------
+// ── SSE ───────────────────────────────────────────────────────────────────────
 app.get('/api/whatsapp/events', (req, res) => {
+  const sessionId = req.query.sessionId || DEFAULT_SESSION;
+  const s = getOrCreate(sessionId);
+
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
-  res.setHeader('X-Accel-Buffering', 'no'); // disable nginx buffering if present
+  res.setHeader('X-Accel-Buffering', 'no');
   res.flushHeaders();
 
-  sendCurrentState(res);
-  sseClients.add(res);
-  req.on('close', () => sseClients.delete(res));
+  // Send current state immediately
+  res.write(`data: ${JSON.stringify({ type: 'state', status: s.status, qr: s.qr, phone: s.phone })}\n\n`);
+
+  s.sseClients.add(res);
+  req.on('close', () => s.sseClients.delete(res));
 });
 
-// ---------- Status endpoint ----------
-app.get('/api/whatsapp/status', (_req, res) => {
-  res.json({ status, qr: currentQR, phone: connectedPhone });
+// ── Status ────────────────────────────────────────────────────────────────────
+app.get('/api/whatsapp/status', (req, res) => {
+  const sessionId = req.query.sessionId || DEFAULT_SESSION;
+  const s = getOrCreate(sessionId);
+  res.json({ status: s.status, qr: s.qr, phone: s.phone });
 });
 
-// ---------- Connect ----------
-async function startConnection() {
-  if (waSocket || status === 'connecting' || status === 'qr') return;
+// ── Connect ───────────────────────────────────────────────────────────────────
+async function startConnection(sessionId) {
+  const s = getOrCreate(sessionId);
+  if (s.socket || s.status === 'connecting' || s.status === 'qr') return;
 
-  status = 'connecting';
-  broadcast({ type: 'state', status, qr: null, phone: null });
+  s.status = 'connecting';
+  broadcast(sessionId, { type: 'state', status: s.status, qr: null, phone: null });
+
+  const dir = sessionDir(sessionId);
+  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
 
   try {
-    const { state, saveCreds } = await useMultiFileAuthState(SESSION_DIR);
+    const { state, saveCreds } = await useMultiFileAuthState(dir);
     const { version } = await fetchLatestBaileysVersion();
 
-    waSocket = makeWASocket({
+    s.socket = makeWASocket({
       version,
       auth: state,
       logger,
@@ -104,81 +124,86 @@ async function startConnection() {
       generateHighQualityLinkPreview: false,
     });
 
-    waSocket.ev.on('creds.update', saveCreds);
+    s.socket.ev.on('creds.update', saveCreds);
 
-    waSocket.ev.on('connection.update', async (update) => {
+    s.socket.ev.on('connection.update', async (update) => {
       const { connection, lastDisconnect, qr } = update;
 
       if (qr) {
-        currentQR = await qrcode.toDataURL(qr);
-        status = 'qr';
-        broadcast({ type: 'state', status, qr: currentQR, phone: null });
-        console.log('[WA] QR code ready — scan with WhatsApp on your phone.');
+        s.qr = await qrcode.toDataURL(qr);
+        s.status = 'qr';
+        broadcast(sessionId, { type: 'state', status: s.status, qr: s.qr, phone: null });
+        console.log(`[WA:${sessionId}] QR ready`);
       }
 
       if (connection === 'open') {
-        currentQR = null;
-        status = 'connected';
-        connectedPhone = waSocket.user?.id?.split(':')[0] ?? 'Unknown';
-        broadcast({ type: 'state', status, qr: null, phone: connectedPhone });
-        console.log(`[WA] Connected as +${connectedPhone}`);
+        s.qr = null;
+        s.status = 'connected';
+        s.phone = s.socket.user?.id?.split(':')[0] ?? 'Unknown';
+        broadcast(sessionId, { type: 'state', status: s.status, qr: null, phone: s.phone });
+        console.log(`[WA:${sessionId}] Connected as +${s.phone}`);
       }
 
       if (connection === 'close') {
         const statusCode = lastDisconnect?.error?.output?.statusCode;
         const loggedOut = statusCode === DisconnectReason.loggedOut;
 
-        waSocket = null;
-        currentQR = null;
-        connectedPhone = null;
-        status = 'disconnected';
-        broadcast({ type: 'state', status, qr: null, phone: null });
-        console.log(`[WA] Disconnected (code: ${statusCode})`);
+        s.socket = null;
+        s.qr = null;
+        s.phone = null;
+        s.status = 'disconnected';
+        broadcast(sessionId, { type: 'state', status: s.status, qr: null, phone: null });
+        console.log(`[WA:${sessionId}] Disconnected (code: ${statusCode})`);
 
         if (loggedOut) {
-          // Session is invalid — delete it so the next connect shows a fresh QR
-          if (existsSync(SESSION_DIR)) rmSync(SESSION_DIR, { recursive: true, force: true });
-          console.log('[WA] Logged out — session cleared.');
+          if (existsSync(dir)) rmSync(dir, { recursive: true, force: true });
+          console.log(`[WA:${sessionId}] Logged out — session cleared.`);
         } else {
-          // Network/timeout disconnect — auto-retry in 5 s
-          console.log('[WA] Reconnecting in 5 s…');
-          setTimeout(startConnection, 5000);
+          console.log(`[WA:${sessionId}] Reconnecting in 5 s…`);
+          setTimeout(() => startConnection(sessionId), 5000);
         }
       }
     });
   } catch (err) {
-    waSocket = null;
-    status = 'disconnected';
-    broadcast({ type: 'error', message: err.message });
-    console.error('[WA] Connection error:', err.message);
+    s.socket = null;
+    s.status = 'disconnected';
+    broadcast(sessionId, { type: 'error', message: err.message });
+    console.error(`[WA:${sessionId}] Error:`, err.message);
   }
 }
 
-app.post('/api/whatsapp/connect', async (_req, res) => {
-  startConnection();
+app.post('/api/whatsapp/connect', async (req, res) => {
+  const sessionId = req.body?.sessionId || DEFAULT_SESSION;
+  startConnection(sessionId);
   res.json({ ok: true });
 });
 
-// ---------- Disconnect ----------
-app.post('/api/whatsapp/disconnect', async (_req, res) => {
-  if (waSocket) {
-    try { await waSocket.logout(); } catch (_) { /* ignore */ }
-    waSocket = null;
+// ── Disconnect ────────────────────────────────────────────────────────────────
+app.post('/api/whatsapp/disconnect', async (req, res) => {
+  const sessionId = req.body?.sessionId || DEFAULT_SESSION;
+  const s = sessions.get(sessionId);
+  if (s?.socket) {
+    try { await s.socket.logout(); } catch (_) { /* ignore */ }
+    s.socket = null;
   }
-  if (existsSync(SESSION_DIR)) rmSync(SESSION_DIR, { recursive: true, force: true });
-  currentQR = null;
-  connectedPhone = null;
-  status = 'disconnected';
-  broadcast({ type: 'state', status, qr: null, phone: null });
+  const dir = sessionDir(sessionId);
+  if (existsSync(dir)) rmSync(dir, { recursive: true, force: true });
+  if (s) {
+    s.qr = null;
+    s.phone = null;
+    s.status = 'disconnected';
+    broadcast(sessionId, { type: 'state', status: 'disconnected', qr: null, phone: null });
+  }
   res.json({ ok: true });
 });
 
-// ---------- Send single message ----------
+// ── Send single ───────────────────────────────────────────────────────────────
 app.post('/api/whatsapp/send', async (req, res) => {
-  const { number, message } = req.body ?? {};
+  const { sessionId = DEFAULT_SESSION, number, message } = req.body ?? {};
+  const s = sessions.get(sessionId);
 
-  if (!waSocket || status !== 'connected') {
-    return res.status(400).json({ error: 'WhatsApp not connected' });
+  if (!s?.socket || s.status !== 'connected') {
+    return res.status(400).json({ error: 'WhatsApp not connected for this session' });
   }
   if (!number || !message) {
     return res.status(400).json({ error: 'number and message are required' });
@@ -186,19 +211,20 @@ app.post('/api/whatsapp/send', async (req, res) => {
 
   try {
     const jid = number.replace(/\D/g, '') + '@s.whatsapp.net';
-    await waSocket.sendMessage(jid, { text: message });
+    await s.socket.sendMessage(jid, { text: message });
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// ---------- Send to multiple numbers ----------
+// ── Send bulk ─────────────────────────────────────────────────────────────────
 app.post('/api/whatsapp/send-bulk', async (req, res) => {
-  const { numbers, message } = req.body ?? {};
+  const { sessionId = DEFAULT_SESSION, numbers, message } = req.body ?? {};
+  const s = sessions.get(sessionId);
 
-  if (!waSocket || status !== 'connected') {
-    return res.status(400).json({ error: 'WhatsApp not connected' });
+  if (!s?.socket || s.status !== 'connected') {
+    return res.status(400).json({ error: 'WhatsApp not connected for this session' });
   }
   if (!Array.isArray(numbers) || numbers.length === 0 || !message) {
     return res.status(400).json({ error: 'numbers (array) and message are required' });
@@ -208,21 +234,19 @@ app.post('/api/whatsapp/send-bulk', async (req, res) => {
   for (const number of numbers) {
     try {
       const jid = number.replace(/\D/g, '') + '@s.whatsapp.net';
-      await waSocket.sendMessage(jid, { text: message });
+      await s.socket.sendMessage(jid, { text: message });
       results.push({ number, ok: true });
     } catch (err) {
       results.push({ number, ok: false, error: err.message });
     }
-    // 500 ms gap between messages to avoid WhatsApp rate-limiting
     await new Promise(r => setTimeout(r, 500));
   }
 
   const sent = results.filter(r => r.ok).length;
-  const failed = results.length - sent;
-  res.json({ results, sent, failed });
+  res.json({ results, sent, failed: results.length - sent });
 });
 
-// ── SMS: send bulk via mNotify v3 REST API ────────────────────────────────────
+// ── SMS: send bulk ────────────────────────────────────────────────────────────
 app.post('/api/sms/send-bulk', async (req, res) => {
   const { numbers, message, senderId, apiKey } = req.body ?? {};
 
@@ -239,57 +263,46 @@ app.post('/api/sms/send-bulk', async (req, res) => {
   }
 
   try {
-    // mNotify v3 REST API — returns JSON
     const url = `https://api.mnotify.com/api/sms/quick?key=${encodeURIComponent(key)}`;
     const response = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         recipient:     normalised,
-        sender:        sender,
-        message:       message,
+        sender,
+        message,
         is_schedule:   false,
         schedule_date: '',
       }),
     });
 
     const raw = await response.text();
-    console.log('[SMS] mNotify raw response:', raw.slice(0, 300));
     let data;
     try { data = JSON.parse(raw); } catch {
-      console.error('[SMS] mNotify returned non-JSON (possible IP block or redirect):', raw.slice(0, 200));
-      return res.status(502).json({ error: 'mNotify returned an unexpected response. The API may be blocking requests from this server region.' });
+      return res.status(502).json({ error: 'mNotify returned an unexpected response.' });
     }
-    console.log('[SMS] mNotify response:', JSON.stringify(data));
 
     if (data.status === 'success' || data.code === 1000) {
       res.json({ ok: true, sent: normalised.length, failed: 0 });
     } else {
-      // Forward the real mNotify error message to the frontend
-      const hint = data.code === 1004
-        ? ' Check your API key in Settings → SMS.'
-        : data.code === 1006
-        ? ' Top up your mNotify balance.'
-        : '';
+      const hint = data.code === 1004 ? ' Check your API key in Settings → SMS.'
+        : data.code === 1006 ? ' Top up your mNotify balance.' : '';
       res.status(400).json({ error: (data.message ?? `mNotify error ${data.code}`) + hint, code: data.code });
     }
   } catch (err) {
-    console.error('[SMS] mNotify request failed:', err.message);
     res.status(500).json({ error: 'Could not reach mNotify API: ' + err.message });
   }
 });
 
-// ── SMS: check credit balance ─────────────────────────────────────────────────
+// ── SMS: balance ──────────────────────────────────────────────────────────────
 app.get('/api/sms/balance', async (req, res) => {
   const key = (req.query.key || MNOTIFY_API_KEY).trim();
   try {
-    const url = `https://api.mnotify.com/api/balance/sms?key=${encodeURIComponent(key)}`;
-    const response = await fetch(url);
+    const response = await fetch(`https://api.mnotify.com/api/balance/sms?key=${encodeURIComponent(key)}`);
     const raw = await response.text();
     let data;
     try { data = JSON.parse(raw); } catch {
-      console.error('[SMS] Balance check got non-JSON:', raw.slice(0, 200));
-      return res.status(502).json({ error: 'mNotify returned an unexpected response.', raw: raw.slice(0, 200) });
+      return res.status(502).json({ error: 'mNotify returned an unexpected response.' });
     }
     res.json(data);
   } catch (err) {
@@ -297,12 +310,19 @@ app.get('/api/sms/balance', async (req, res) => {
   }
 });
 
-// ---------- Start ----------
+// ── Start + auto-reconnect saved sessions ─────────────────────────────────────
 app.listen(PORT, () => {
-  console.log(`[ChurchCare] WhatsApp server listening on http://localhost:${PORT}`);
-  // Auto-connect if a saved session already exists
-  if (existsSync(SESSION_DIR)) {
-    console.log('[WA] Saved session found — reconnecting…');
-    startConnection();
-  }
+  console.log(`[ChurchCare] WhatsApp server on http://localhost:${PORT}`);
+  if (!existsSync(SESSIONS_BASE)) mkdirSync(SESSIONS_BASE, { recursive: true });
+
+  // Reconnect any previously saved sessions
+  try {
+    const entries = readdirSync(SESSIONS_BASE, { withFileTypes: true });
+    for (const entry of entries) {
+      if (entry.isDirectory()) {
+        console.log(`[WA] Restoring session: ${entry.name}`);
+        startConnection(entry.name);
+      }
+    }
+  } catch (_) { /* no sessions dir yet */ }
 });

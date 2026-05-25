@@ -26,14 +26,18 @@ const STEPS = [
   'Point your phone camera at this QR code',
 ];
 
-export function WhatsAppConnect() {
+interface Props {
+  sessionId?: string;
+}
+
+export function WhatsAppConnect({ sessionId = 'default' }: Props) {
   const [state, setState] = useState<WaState>({ status: 'disconnected', qr: null, phone: null });
   const [serverOffline, setServerOffline] = useState(false);
   const esRef = useRef<EventSource | null>(null);
 
   const connectSSE = () => {
     if (esRef.current) esRef.current.close();
-    const es = new EventSource(`${API_BASE}/api/whatsapp/events`);
+    const es = new EventSource(`${API_BASE}/api/whatsapp/events?sessionId=${encodeURIComponent(sessionId)}`);
     esRef.current = es;
 
     es.onmessage = (e) => {
@@ -50,7 +54,6 @@ export function WhatsAppConnect() {
       setServerOffline(true);
       es.close();
       esRef.current = null;
-      // Retry SSE connection every 5 s while server is offline
       setTimeout(connectSSE, 5000);
     };
   };
@@ -58,15 +61,24 @@ export function WhatsAppConnect() {
   useEffect(() => {
     connectSSE();
     return () => { esRef.current?.close(); };
-  }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId]);
 
   const handleConnect = async () => {
     setServerOffline(false);
-    await fetch(`${API_BASE}/api/whatsapp/connect`, { method: 'POST' }).catch(() => setServerOffline(true));
+    await fetch(`${API_BASE}/api/whatsapp/connect`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId }),
+    }).catch(() => setServerOffline(true));
   };
 
   const handleDisconnect = async () => {
-    await fetch(`${API_BASE}/api/whatsapp/disconnect`, { method: 'POST' }).catch(() => setServerOffline(true));
+    await fetch(`${API_BASE}/api/whatsapp/disconnect`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId }),
+    }).catch(() => setServerOffline(true));
   };
 
   if (serverOffline) {
@@ -101,7 +113,7 @@ export function WhatsAppConnect() {
             Linked to <span className="font-mono font-medium">+{state.phone}</span>
           </p>
           <p className="text-xs text-muted-foreground mt-1">
-            Messages sent from the Communication page will be delivered via WhatsApp.
+            Messages sent from Communication and Task Assignment will be delivered via this WhatsApp account.
           </p>
         </div>
         <Button
@@ -119,15 +131,12 @@ export function WhatsAppConnect() {
   if (state.status === 'qr' && state.qr) {
     return (
       <div className="flex flex-col lg:flex-row gap-8 items-center py-4">
-        {/* QR code */}
         <div className="shrink-0">
           <div className="w-56 h-56 rounded-2xl border-4 border-green-400 p-2 bg-white shadow-lg">
             <img src={state.qr} alt="WhatsApp QR Code" className="w-full h-full rounded-xl" />
           </div>
           <p className="text-xs text-center text-muted-foreground mt-2">Scan with WhatsApp</p>
         </div>
-
-        {/* Instructions */}
         <div className="space-y-4">
           <div className="flex items-center gap-2 mb-1">
             <WhatsAppIcon className="w-5 h-5 text-green-500" />
@@ -151,7 +160,6 @@ export function WhatsAppConnect() {
     );
   }
 
-  // disconnected or connecting
   return (
     <div className="flex flex-col items-center gap-5 py-10 text-center">
       <div className="w-16 h-16 rounded-full bg-green-500/10 flex items-center justify-center">
@@ -172,10 +180,7 @@ export function WhatsAppConnect() {
         </p>
       </div>
       {state.status === 'disconnected' && (
-        <Button
-          onClick={handleConnect}
-          className="gap-2 bg-green-600 hover:bg-green-700 text-white"
-        >
+        <Button onClick={handleConnect} className="gap-2 bg-green-600 hover:bg-green-700 text-white">
           <WhatsAppIcon className="w-4 h-4" /> Connect WhatsApp
         </Button>
       )}

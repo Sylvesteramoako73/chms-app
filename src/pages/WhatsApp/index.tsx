@@ -2,8 +2,11 @@ import { motion } from 'framer-motion';
 import { MessageCircle } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { WhatsAppConnect } from '@/components/WhatsAppConnect';
+import { useAuth } from '@/context/AuthContext';
 
 export default function WhatsAppPage() {
+  const { profile } = useAuth();
+
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-6 max-w-2xl">
       <div>
@@ -26,7 +29,7 @@ export default function WhatsAppPage() {
             <code className="bg-black/10 px-1 rounded">npm run server:install</code> once, then{' '}
             <code className="bg-black/10 px-1 rounded">npm run server</code>.
           </div>
-          <WhatsAppConnect />
+          <WhatsAppConnect sessionId={profile?.id} />
         </CardContent>
       </Card>
     </motion.div>

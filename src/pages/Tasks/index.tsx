@@ -250,16 +250,17 @@ export default function Tasks() {
 
     if (task.notificationChannel === 'WhatsApp') {
       try {
-        const statusRes = await fetch(`${API_BASE}/api/whatsapp/status`);
+        const sessionId = profile?.id ?? 'default';
+        const statusRes = await fetch(`${API_BASE}/api/whatsapp/status?sessionId=${encodeURIComponent(sessionId)}`);
         const { status } = await statusRes.json() as { status: string };
         if (status !== 'connected') {
-          toast({ title: 'WhatsApp not connected', description: 'Connect WhatsApp in the Communication page first.', variant: 'destructive' });
+          toast({ title: 'WhatsApp not connected', description: 'Connect your WhatsApp account on the WhatsApp page first.', variant: 'destructive' });
           return;
         }
         const res = await fetch(`${API_BASE}/api/whatsapp/send`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ number: phone, message }),
+          body: JSON.stringify({ sessionId, number: phone, message }),
         });
         if (!res.ok) throw new Error('Send failed');
         toast({ title: 'WhatsApp sent', description: `Message delivered to ${task.assignedToName}` });
@@ -303,16 +304,17 @@ export default function Tasks() {
 
     if (channel === 'WhatsApp') {
       try {
-        const statusRes = await fetch(`${API_BASE}/api/whatsapp/status`);
+        const sessionId = profile?.id ?? 'default';
+        const statusRes = await fetch(`${API_BASE}/api/whatsapp/status?sessionId=${encodeURIComponent(sessionId)}`);
         const { status } = await statusRes.json() as { status: string };
         if (status !== 'connected') {
-          toast({ title: 'WhatsApp not connected', description: 'Connect WhatsApp in the Communication page first.', variant: 'destructive' });
+          toast({ title: 'WhatsApp not connected', description: 'Connect your WhatsApp account on the WhatsApp page first.', variant: 'destructive' });
           return;
         }
         await fetch(`${API_BASE}/api/whatsapp/send-bulk`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ numbers: clean, message }),
+          body: JSON.stringify({ sessionId, numbers: clean, message }),
         });
         toast({ title: 'WhatsApp sent', description: `Message sent to ${label}` });
       } catch {

@@ -101,7 +101,7 @@ export default function Communication() {
   const [waStatus, setWaStatus] = useState<'unknown' | 'connected' | 'disconnected'>('unknown');
 
   useEffect(() => {
-    fetch(`${API_BASE}/api/whatsapp/status`)
+    fetch(`${API_BASE}/api/whatsapp/status?sessionId=${encodeURIComponent(profile?.id ?? 'default')}`)
       .then(r => r.json())
       .then(d => setWaStatus(d.status === 'connected' ? 'connected' : 'disconnected'))
       .catch(() => setWaStatus('disconnected'));
@@ -233,7 +233,7 @@ export default function Communication() {
       const res = await fetch(`${API_BASE}/api/whatsapp/send-bulk`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ numbers: phones, message: text }),
+        body: JSON.stringify({ sessionId: profile?.id ?? 'default', numbers: phones, message: text }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? 'Send failed');

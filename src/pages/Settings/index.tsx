@@ -603,7 +603,7 @@ export default function Settings() {
                 Open a second terminal and run: <code className="bg-black/10 px-1 rounded">npm run server:install</code> (once),
                 then <code className="bg-black/10 px-1 rounded">npm run server</code>.
               </div>
-              <WhatsAppConnect />
+              <WhatsAppConnect sessionId={profile?.id} />
             </CardContent>
           </Card>
         </TabsContent>
