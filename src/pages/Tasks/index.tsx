@@ -225,9 +225,12 @@ export default function Tasks() {
     return assignableProfiles; // 'all'
   }, [form.assignMode, form.assignedTo, form.targetRole, assignableProfiles]);
 
-  // Match a profile's email to a member record to get their phone
-  const getPhone = (email: string) =>
-    members.find(m => m.email?.toLowerCase() === email.toLowerCase())?.phone ?? undefined;
+  // Get phone: prefer profile's own phone, fall back to matching member record by email
+  const getPhone = (profileId: string, email: string) => {
+    const profilePhone = allProfiles.find(p => p.id === profileId)?.phone;
+    if (profilePhone) return profilePhone;
+    return members.find(m => m.email?.toLowerCase() === email.toLowerCase())?.phone ?? undefined;
+  };
 
   const myTasks = tasks.filter(t => t.assignedTo === profile?.id);
   const assignedTasks = tasks.filter(t => t.assignedBy === profile?.id && t.assignedTo !== profile?.id);
@@ -369,7 +372,7 @@ export default function Tasks() {
       id: `task_${now}_${i}`,
       assignedTo: p.id,
       assignedToName: p.name,
-      assignedToPhone: getPhone(p.email),
+      assignedToPhone: getPhone(p.id, p.email),
     }));
 
     const error = taskList.length === 1
@@ -395,7 +398,7 @@ export default function Tasks() {
     });
 
     // External notifications — only to those with a matched phone
-    const phones = targetProfiles.map(p => getPhone(p.email)).filter(Boolean) as string[];
+    const phones = targetProfiles.map(p => getPhone(p.id, p.email)).filter(Boolean) as string[];
     const message = buildMessage(base, profile!.name);
     const groupLabel = form.assignMode === 'individual'
       ? targetProfiles[0].name

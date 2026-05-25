@@ -9,6 +9,7 @@ export interface UserProfile {
   email: string;
   role: UserRole;
   branchId?: string;
+  phone?: string;
 }
 
 interface AuthContextValue {
@@ -20,7 +21,8 @@ interface AuthContextValue {
   signOut: () => Promise<void>;
   allProfiles: UserProfile[];
   updateUserRole: (userId: string, role: UserRole, branchId?: string) => Promise<{ error: string | null }>;
-  createUser: (name: string, email: string, password: string, role: UserRole, branchId?: string) => Promise<{ error: string | null }>;
+  updateUserProfile: (userId: string, updates: { name?: string; phone?: string; role?: UserRole; branchId?: string }) => Promise<{ error: string | null }>;
+  createUser: (name: string, email: string, password: string, role: UserRole, branchId?: string, phone?: string) => Promise<{ error: string | null }>;
   deleteUser: (userId: string) => Promise<{ error: string | null }>;
   refreshProfiles: () => Promise<void>;
 }
@@ -59,12 +61,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('id, name, email, role, branch_id')
+        .select('id, name, email, role, branch_id, phone')
         .eq('id', currentUser.id)
         .single();
 
       if (!error && data && isValidRole(data.role)) {
-        setProfile({ id: data.id, name: data.name, email: data.email, role: data.role as UserRole, branchId: data.branch_id ?? undefined });
+        setProfile({ id: data.id, name: data.name, email: data.email, role: data.role as UserRole, branchId: data.branch_id ?? undefined, phone: data.phone ?? undefined });
         return;
       }
     } catch (_) { /* profiles table may not exist yet */ }
@@ -75,8 +77,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const fetchAllProfiles = useCallback(async () => {
     try {
-      const { data } = await supabase.from('profiles').select('id, name, email, role, branch_id').order('created_at');
-      if (data) setAllProfiles(data.map(r => ({ id: r.id, name: r.name, email: r.email, role: (isValidRole(r.role) ? r.role : 'Data Entry') as UserRole, branchId: r.branch_id ?? undefined })));
+      const { data } = await supabase.from('profiles').select('id, name, email, role, branch_id, phone').order('created_at');
+      if (data) setAllProfiles(data.map(r => ({ id: r.id, name: r.name, email: r.email, role: (isValidRole(r.role) ? r.role : 'Data Entry') as UserRole, branchId: r.branch_id ?? undefined, phone: r.phone ?? undefined })));
     } catch (_) { /* profiles table may not exist */ }
   }, []);
 
@@ -208,8 +210,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error: null };
   };
 
+  // ── Update User Profile (admin) ───────────────────────────────────────────
+  const updateUserProfile = async (userId: string, updates: { name?: string; phone?: string; role?: UserRole; branchId?: string }): Promise<{ error: string | null }> => {
+    try {
+      const patch: Record<string, unknown> = {};
+      if (updates.name !== undefined) patch.name = updates.name;
+      if (updates.phone !== undefined) patch.phone = updates.phone || null;
+      if (updates.role !== undefined) {
+        patch.role = updates.role;
+        patch.branch_id = updates.role === 'Branch Pastor' ? (updates.branchId ?? null) : null;
+      }
+      const { error } = await supabase.from('profiles').update(patch).eq('id', userId);
+      if (error) return { error: error.message };
+
+      // If editing own profile, sync user_metadata too
+      if (userId === user?.id && updates.role) {
+        await supabase.auth.updateUser({ data: { role: updates.role, ...(updates.name ? { name: updates.name } : {}) } });
+        const { data: { user: refreshed } } = await supabase.auth.getUser();
+        if (refreshed) await fetchProfile(refreshed);
+      }
+    } catch (_) {
+      return { error: 'Could not update profile.' };
+    }
+    await fetchAllProfiles();
+    return { error: null };
+  };
+
   // ── Create User (admin) ───────────────────────────────────────────────────
-  const createUser = async (name: string, email: string, password: string, role: UserRole, branchId?: string): Promise<{ error: string | null }> => {
+  const createUser = async (name: string, email: string, password: string, role: UserRole, branchId?: string, phone?: string): Promise<{ error: string | null }> => {
     // Capture the admin's current session so we can restore it if Supabase
     // auto-signs-in the new user (happens when email confirmation is disabled).
     const { data: { session: adminSession } } = await supabase.auth.getSession();
@@ -225,7 +253,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Mirror to profiles table
     try {
       await supabase.from('profiles').upsert(
-        { id: data.user.id, name: name.trim(), email: email.trim().toLowerCase(), role, branch_id: role === 'Branch Pastor' ? (branchId ?? null) : null },
+        { id: data.user.id, name: name.trim(), email: email.trim().toLowerCase(), role, branch_id: role === 'Branch Pastor' ? (branchId ?? null) : null, phone: phone ?? null },
         { onConflict: 'id' },
       );
     } catch (_) { /* profiles table may not exist */ }
@@ -267,7 +295,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, profile, loading, signIn, signUp, signOut, allProfiles, updateUserRole, createUser, deleteUser, refreshProfiles }}>
+    <AuthContext.Provider value={{ user, profile, loading, signIn, signUp, signOut, allProfiles, updateUserRole, updateUserProfile, createUser, deleteUser, refreshProfiles }}>
       {children}
     </AuthContext.Provider>
   );

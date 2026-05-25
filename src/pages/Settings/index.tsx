@@ -40,18 +40,21 @@ const ROLE_BADGE: Record<UserRole, string> = {
 
 export default function Settings() {
   const { theme, toggleTheme, departments, campuses, auditLogs, addCampus, updateCampus, deleteCampus } = useData();
-  const { profile, allProfiles, updateUserRole, createUser, deleteUser, refreshProfiles } = useAuth();
+  const { profile, allProfiles, updateUserRole, updateUserProfile, createUser, deleteUser, refreshProfiles } = useAuth();
   const { actions } = useRole();
   const { toast } = useToast();
   const [updatingRole, setUpdatingRole] = useState<string | null>(null);
   const [addUserOpen, setAddUserOpen] = useState(false);
-  const [addUserForm, setAddUserForm] = useState({ name: '', email: '', password: '', role: 'Data Entry' as UserRole });
+  const [addUserForm, setAddUserForm] = useState({ name: '', email: '', password: '', phone: '', role: 'Data Entry' as UserRole });
   const [addUserBranchId, setAddUserBranchId] = useState('');
   const [addUserLoading, setAddUserLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [confirmDeleteName, setConfirmDeleteName] = useState('');
+  const [editUserOpen, setEditUserOpen] = useState(false);
+  const [editUserLoading, setEditUserLoading] = useState(false);
+  const [editUserForm, setEditUserForm] = useState({ id: '', name: '', email: '', phone: '', role: 'Data Entry' as UserRole, branchId: '' });
 
   const [campusDialogOpen, setCampusDialogOpen] = useState(false);
   const [editingCampus, setEditingCampus] = useState<Campus | null>(null);
@@ -150,16 +153,39 @@ export default function Settings() {
     }
     setAddUserLoading(true);
     const branchId = addUserForm.role === 'Branch Pastor' ? addUserBranchId || undefined : undefined;
-    const { error } = await createUser(addUserForm.name, addUserForm.email, addUserForm.password, addUserForm.role, branchId);
+    const { error } = await createUser(addUserForm.name, addUserForm.email, addUserForm.password, addUserForm.role, branchId, addUserForm.phone.trim() || undefined);
     setAddUserLoading(false);
     if (error) {
       toast({ title: 'Failed to create user', description: error, variant: 'destructive' });
     } else {
       toast({ title: 'User created', description: `${addUserForm.name} has been added with ${addUserForm.role} role.` });
       setAddUserOpen(false);
-      setAddUserForm({ name: '', email: '', password: '', role: 'Data Entry' });
+      setAddUserForm({ name: '', email: '', password: '', phone: '', role: 'Data Entry' });
       setAddUserBranchId('');
     }
+  };
+
+  const openEditUser = (u: typeof allProfiles[0]) => {
+    setEditUserForm({ id: u.id, name: u.name, email: u.email, phone: u.phone ?? '', role: u.role, branchId: u.branchId ?? '' });
+    setEditUserOpen(true);
+  };
+
+  const handleEditUser = async () => {
+    if (!editUserForm.name.trim()) { toast({ title: 'Name is required', variant: 'destructive' }); return; }
+    if (editUserForm.role === 'Branch Pastor' && !editUserForm.branchId) {
+      toast({ title: 'Branch required', description: 'Please assign a branch for the Branch Pastor.', variant: 'destructive' }); return;
+    }
+    setEditUserLoading(true);
+    const { error } = await updateUserProfile(editUserForm.id, {
+      name: editUserForm.name.trim(),
+      phone: editUserForm.phone.trim(),
+      role: editUserForm.role,
+      branchId: editUserForm.role === 'Branch Pastor' ? editUserForm.branchId : undefined,
+    });
+    setEditUserLoading(false);
+    if (error) { toast({ title: 'Failed to update user', description: error, variant: 'destructive' }); return; }
+    toast({ title: 'User updated', description: `${editUserForm.name} has been updated.` });
+    setEditUserOpen(false);
   };
 
   const promptDeleteUser = (userId: string, name: string) => {
@@ -539,32 +565,25 @@ export default function Settings() {
                           {u.id === profile?.id && <span className="ml-1.5 text-[10px] text-muted-foreground">(you)</span>}
                         </p>
                         <p className="text-xs text-muted-foreground truncate">{u.email}</p>
+                        {u.phone && <p className="text-xs text-muted-foreground">{u.phone}</p>}
                       </div>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
-                      {updatingRole === u.id ? (
-                        <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
-                      ) : (
-                        <Select
-                          value={u.role}
-                          onValueChange={v => handleRoleChange(u.id, v as UserRole)}
-                          disabled={u.id === profile?.id}
-                        >
-                          <SelectTrigger className="w-[150px] h-8 text-xs">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {ROLE_OPTIONS.map(r => (
-                              <SelectItem key={r} value={r} className="text-xs">{r}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      )}
+                      <span className={`text-[10px] font-semibold px-2 py-0.5 rounded border ${ROLE_BADGE[u.role]}`}>{u.role}</span>
+                      <Button
+                        variant="ghost" size="icon"
+                        className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                        onClick={() => openEditUser(u)}
+                        title="Edit user"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                      </Button>
                       <Button
                         variant="ghost" size="icon"
                         className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
                         disabled={u.id === profile?.id}
                         onClick={() => promptDeleteUser(u.id, u.name)}
+                        title="Delete user"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </Button>
@@ -631,6 +650,10 @@ export default function Settings() {
               <p className="text-xs text-muted-foreground">Share this password with the user so they can sign in.</p>
             </div>
             <div className="space-y-1.5">
+              <Label>Phone Number</Label>
+              <Input placeholder="+233 XX XXX XXXX" value={addUserForm.phone} onChange={e => setAddUserForm(f => ({ ...f, phone: e.target.value }))} />
+            </div>
+            <div className="space-y-1.5">
               <Label>Role *</Label>
               <Select value={addUserForm.role} onValueChange={v => { setAddUserForm(f => ({ ...f, role: v as UserRole })); setAddUserBranchId(''); }}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
@@ -656,6 +679,57 @@ export default function Settings() {
             <Button onClick={handleAddUser} disabled={addUserLoading} className="gap-2 bg-white hover:bg-gray-50 text-navy-900 font-medium">
               {addUserLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <UserPlus className="w-4 h-4" />}
               {addUserLoading ? 'Creating…' : 'Create User'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit User Dialog */}
+      <Dialog open={editUserOpen} onOpenChange={setEditUserOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-display text-xl">Edit User</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <Label>Full Name *</Label>
+              <Input value={editUserForm.name} onChange={e => setEditUserForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. John Mensah" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Email Address</Label>
+              <Input value={editUserForm.email} disabled className="opacity-50 cursor-not-allowed" />
+              <p className="text-xs text-muted-foreground">Email cannot be changed here.</p>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Phone Number</Label>
+              <Input value={editUserForm.phone} onChange={e => setEditUserForm(f => ({ ...f, phone: e.target.value }))} placeholder="+233 XX XXX XXXX" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Role *</Label>
+              <Select value={editUserForm.role} onValueChange={v => setEditUserForm(f => ({ ...f, role: v as UserRole, branchId: '' }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {ROLE_OPTIONS.map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            {editUserForm.role === 'Branch Pastor' && (
+              <div className="space-y-1.5">
+                <Label>Assign to Branch *</Label>
+                <Select value={editUserForm.branchId} onValueChange={v => setEditUserForm(f => ({ ...f, branchId: v }))}>
+                  <SelectTrigger><SelectValue placeholder="Select branch…" /></SelectTrigger>
+                  <SelectContent>
+                    {campuses.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditUserOpen(false)}>Cancel</Button>
+            <Button onClick={handleEditUser} disabled={editUserLoading} className="gap-2">
+              {editUserLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+              {editUserLoading ? 'Saving…' : 'Save Changes'}
             </Button>
           </DialogFooter>
         </DialogContent>
