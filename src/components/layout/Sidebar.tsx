@@ -2,7 +2,7 @@ import { NavLink } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   LayoutDashboard, Users, CalendarCheck, Coins,
-  CalendarDays, Settings, MessageSquare, PieChart, Building2, X,
+  CalendarDays, Settings, MessageSquare, MessageCircle, PieChart, Building2, X,
   Heart, HeartHandshake, ClipboardList, Target, LogOut, Church, UserPlus,
   UserCheck, BellRing, Baby, PlayCircle, Network, Megaphone, Boxes, ChevronDown,
   ListTodo,
@@ -58,6 +58,7 @@ const navGroups = [
     label: 'Communication',
     items: [
       { name: 'Communication', path: '/communication', icon: MessageSquare },
+      { name: 'WhatsApp', path: '/whatsapp', icon: MessageCircle },
       { name: 'Task Assignment', path: '/tasks', icon: ListTodo },
       { name: 'Automation', path: '/automation', icon: BellRing },
     ],

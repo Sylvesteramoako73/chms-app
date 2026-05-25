@@ -7,17 +7,17 @@ const ROLE_ACCESS: Record<UserRole, string[]> = {
     '/', '/members', '/attendance', '/giving', '/events', '/departments',
     '/communication', '/reports', '/settings', '/prayer', '/pastoral',
     '/volunteers', '/pledges', '/visitors', '/outreach', '/assets',
-    '/workers', '/automation', '/children', '/media', '/cells', '/tasks',
+    '/workers', '/automation', '/children', '/media', '/cells', '/tasks', '/whatsapp',
   ],
   'Branch Pastor': [
     '/', '/members', '/attendance', '/giving', '/communication',
     '/reports', '/prayer', '/pastoral', '/volunteers', '/pledges', '/events', '/visitors', '/outreach', '/assets',
-    '/workers', '/children', '/media', '/cells', '/tasks',
+    '/workers', '/children', '/media', '/cells', '/tasks', '/whatsapp',
   ],
   Pastor: [
     '/', '/members', '/attendance', '/giving', '/communication',
     '/reports', '/prayer', '/pastoral', '/volunteers', '/pledges', '/events', '/visitors', '/outreach', '/assets',
-    '/workers', '/automation', '/children', '/media', '/cells', '/tasks',
+    '/workers', '/automation', '/children', '/media', '/cells', '/tasks', '/whatsapp',
   ],
   'Department Head': [
     '/', '/members', '/attendance', '/events', '/prayer', '/volunteers', '/outreach', '/assets',

@@ -26,6 +26,7 @@ import ChildCheckin from './pages/ChildCheckin';
 import Media from './pages/Media';
 import CellGroups from './pages/CellGroups';
 import Tasks from './pages/Tasks';
+import WhatsApp from './pages/WhatsApp';
 
 function LoadingScreen() {
   return (
@@ -68,6 +69,7 @@ function AppRoutes() {
         <Route path="media" element={<Media />} />
         <Route path="cells" element={<CellGroups />} />
         <Route path="tasks" element={<Tasks />} />
+        <Route path="whatsapp" element={<WhatsApp />} />
       </Route>
     </Routes>
   );
