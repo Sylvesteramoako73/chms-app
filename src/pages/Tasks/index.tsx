@@ -175,33 +175,59 @@ function TaskCard({
   );
 }
 
+type AssignMode = 'individual' | 'group' | 'all';
+
+const EMPTY_FORM = {
+  title: '',
+  description: '',
+  assignMode: 'individual' as AssignMode,
+  assignedTo: '',
+  targetRole: '' as UserRole | '',
+  priority: 'Medium' as TaskPriority,
+  dueDate: '',
+  notificationChannel: 'WhatsApp' as TaskNotificationChannel,
+};
+
 // ── Main page ──────────────────────────────────────────────────────────────
 export default function Tasks() {
   const { profile, allProfiles } = useAuth();
   const { role } = useRole();
-  const { addNotification } = useData();
-  const { tasks, loading, addTask, updateStatus, deleteTask } = useTasks(profile?.id);
+  const { addNotification, members } = useData();
+  const { tasks, loading, addTask, addTasksBulk, updateStatus, deleteTask } = useTasks(profile?.id);
   const { toast } = useToast();
 
   const [showDialog, setShowDialog] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({
-    title: '',
-    description: '',
-    assignedTo: '',
-    priority: 'Medium' as TaskPriority,
-    dueDate: '',
-    notificationChannel: 'WhatsApp' as TaskNotificationChannel,
-    phone: '',
-  });
+  const [form, setForm] = useState(EMPTY_FORM);
 
   const canAssign = ASSIGNABLE_ROLES[role].length > 0;
 
-  // Profiles the current user is allowed to assign tasks to
+  // All profiles this user can assign to
   const assignableProfiles = useMemo(() => {
     const allowedRoles = ASSIGNABLE_ROLES[role];
     return allProfiles.filter(p => p.id !== profile?.id && allowedRoles.includes(p.role));
   }, [allProfiles, profile?.id, role]);
+
+  // Roles available for "By Role" mode
+  const assignableRoles = useMemo(() =>
+    [...new Set(assignableProfiles.map(p => p.role))] as UserRole[],
+  [assignableProfiles]);
+
+  // Resolve which profiles will receive the task based on current mode
+  const targetProfiles = useMemo(() => {
+    if (form.assignMode === 'individual') {
+      const p = assignableProfiles.find(x => x.id === form.assignedTo);
+      return p ? [p] : [];
+    }
+    if (form.assignMode === 'group') {
+      return form.targetRole ? assignableProfiles.filter(p => p.role === form.targetRole) : [];
+    }
+    return assignableProfiles; // 'all'
+  }, [form.assignMode, form.assignedTo, form.targetRole, assignableProfiles]);
+
+  // Match a profile's email to a member record to get their phone
+  const getPhone = (email: string) =>
+    members.find(m => m.email?.toLowerCase() === email.toLowerCase())?.phone ?? undefined;
 
   const myTasks = tasks.filter(t => t.assignedTo === profile?.id);
   const assignedTasks = tasks.filter(t => t.assignedBy === profile?.id && t.assignedTo !== profile?.id);
@@ -213,6 +239,7 @@ export default function Tasks() {
     assigned: assignedTasks.length,
   }), [myTasks, assignedTasks]);
 
+  // ── Single-task re-notify (from task card send button) ────────────────────
   const sendNotification = async (task: Task): Promise<void> => {
     if (!task.assignedToPhone) return;
     const message = buildMessage(task, profile?.name ?? 'Your Pastor');
@@ -237,7 +264,6 @@ export default function Tasks() {
         toast({ title: 'WhatsApp send failed', description: 'Check that the WhatsApp server is running.', variant: 'destructive' });
       }
     } else {
-      // SMS via mNotify
       let smsSettings = { apiKey: '', senderId: 'ChurchCare' };
       try { smsSettings = { ...smsSettings, ...JSON.parse(localStorage.getItem('chms_sms_settings') ?? '{}') }; } catch { /* */ }
       if (!smsSettings.apiKey.trim()) {
@@ -249,83 +275,145 @@ export default function Tasks() {
         const res = await fetch(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            recipient: [phone],
-            sender: (smsSettings.senderId || 'ChurchCare').slice(0, 11),
-            message,
-            is_schedule: false,
-            schedule_date: '',
-          }),
+          body: JSON.stringify({ recipient: [phone], sender: (smsSettings.senderId || 'ChurchCare').slice(0, 11), message, is_schedule: false, schedule_date: '' }),
         });
         const data = await res.json() as { status?: string; code?: string };
         if (data.code === '2000' || data.status === 'success') {
           toast({ title: 'SMS sent', description: `SMS delivered to ${task.assignedToName}` });
-        } else {
-          throw new Error(JSON.stringify(data));
-        }
+        } else { throw new Error(); }
       } catch {
         toast({ title: 'SMS send failed', description: 'Check your mNotify API key and balance.', variant: 'destructive' });
       }
     }
   };
 
-  const handleAssigneeChange = (profileId: string) => {
-    const p = assignableProfiles.find(x => x.id === profileId);
-    setForm(f => ({ ...f, assignedTo: profileId, phone: '' }));
-    // Try to prefill phone from members list if this profile's email matches a member
-    // (Leave empty — assigner will type it)
-    void p;
+  // ── Bulk notify for group/all assignments ──────────────────────────────────
+  const sendBulkNotification = async (
+    channel: TaskNotificationChannel,
+    numbers: string[],
+    message: string,
+    label: string,
+  ): Promise<void> => {
+    if (numbers.length === 0) return;
+    const clean = numbers.map(n => n.replace(/\D/g, '')).filter(Boolean);
+    if (clean.length === 0) return;
+
+    if (channel === 'WhatsApp') {
+      try {
+        const statusRes = await fetch(`${API_BASE}/api/whatsapp/status`);
+        const { status } = await statusRes.json() as { status: string };
+        if (status !== 'connected') {
+          toast({ title: 'WhatsApp not connected', description: 'Connect WhatsApp in the Communication page first.', variant: 'destructive' });
+          return;
+        }
+        await fetch(`${API_BASE}/api/whatsapp/send-bulk`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ numbers: clean, message }),
+        });
+        toast({ title: 'WhatsApp sent', description: `Message sent to ${label}` });
+      } catch {
+        toast({ title: 'WhatsApp send failed', description: 'Check that the WhatsApp server is running.', variant: 'destructive' });
+      }
+    } else {
+      let smsSettings = { apiKey: '', senderId: 'ChurchCare' };
+      try { smsSettings = { ...smsSettings, ...JSON.parse(localStorage.getItem('chms_sms_settings') ?? '{}') }; } catch { /* */ }
+      if (!smsSettings.apiKey.trim()) {
+        toast({ title: 'SMS API key not set', description: 'Add your mNotify API key in the Communication settings.', variant: 'destructive' });
+        return;
+      }
+      try {
+        const res = await fetch(`${API_BASE}/api/sms/send-bulk`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ numbers: clean, message, apiKey: smsSettings.apiKey.trim(), senderId: smsSettings.senderId || 'ChurchCare' }),
+        });
+        const data = await res.json() as { success?: boolean };
+        if (data.success) {
+          toast({ title: 'SMS sent', description: `SMS sent to ${label}` });
+        } else { throw new Error(); }
+      } catch {
+        toast({ title: 'SMS send failed', description: 'Check your mNotify API key and balance.', variant: 'destructive' });
+      }
+    }
   };
 
   const handleSubmit = async () => {
     if (!form.title.trim()) { toast({ title: 'Title is required', variant: 'destructive' }); return; }
-    if (!form.assignedTo) { toast({ title: 'Please select an assignee', variant: 'destructive' }); return; }
-
-    const assignee = assignableProfiles.find(p => p.id === form.assignedTo);
-    if (!assignee) return;
+    if (form.assignMode === 'individual' && !form.assignedTo) {
+      toast({ title: 'Please select an assignee', variant: 'destructive' }); return;
+    }
+    if (form.assignMode === 'group' && !form.targetRole) {
+      toast({ title: 'Please select a role', variant: 'destructive' }); return;
+    }
+    if (targetProfiles.length === 0) {
+      toast({ title: 'No users found', description: 'No users match the selected group.', variant: 'destructive' }); return;
+    }
 
     setSaving(true);
-    const newTask: Omit<Task, 'createdAt' | 'updatedAt'> = {
-      id: `task_${Date.now()}`,
+    const now = Date.now();
+    const base = {
       title: form.title.trim(),
       description: form.description.trim() || undefined,
-      assignedTo: form.assignedTo,
-      assignedToName: assignee.name,
-      assignedToPhone: form.phone.trim() || undefined,
       assignedBy: profile!.id,
       assignedByName: profile!.name,
-      status: 'Pending',
+      status: 'Pending' as TaskStatus,
       priority: form.priority,
       dueDate: form.dueDate || undefined,
       notificationChannel: form.notificationChannel,
       notificationSent: false,
     };
 
-    const error = await addTask(newTask);
+    const taskList: Omit<Task, 'createdAt' | 'updatedAt'>[] = targetProfiles.map((p, i) => ({
+      ...base,
+      id: `task_${now}_${i}`,
+      assignedTo: p.id,
+      assignedToName: p.name,
+      assignedToPhone: getPhone(p.email),
+    }));
+
+    const insertFn = taskList.length === 1 ? addTask : addTasksBulk;
+    const error = await (insertFn as typeof addTasksBulk)(taskList);
     if (error) {
-      toast({ title: 'Failed to create task', description: error.message, variant: 'destructive' });
+      toast({ title: 'Failed to create tasks', description: error.message, variant: 'destructive' });
       setSaving(false);
       return;
     }
 
-    // In-app notification for assignee
-    addNotification({
-      id: `notif_task_${Date.now()}`,
-      title: 'New Task Assigned',
-      message: `${profile!.name} assigned you: "${newTask.title}"`,
-      recipient: form.assignedTo,
-      createdBy: profile!.id,
-      createdAt: new Date().toISOString(),
+    // In-app notifications
+    const ts = new Date().toISOString();
+    targetProfiles.forEach((p, i) => {
+      addNotification({
+        id: `notif_task_${now}_${i}`,
+        title: 'New Task Assigned',
+        message: `${profile!.name} assigned you: "${base.title}"`,
+        recipient: p.id,
+        createdBy: profile!.id,
+        createdAt: ts,
+      });
     });
 
-    // Send WhatsApp / SMS notification
-    if (form.phone.trim()) {
-      await sendNotification({ ...newTask, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
+    // External notifications — only to those with a matched phone
+    const phones = targetProfiles.map(p => getPhone(p.email)).filter(Boolean) as string[];
+    const message = buildMessage(base, profile!.name);
+    const groupLabel = form.assignMode === 'individual'
+      ? targetProfiles[0].name
+      : form.assignMode === 'group'
+        ? `all ${form.targetRole}s (${targetProfiles.length})`
+        : `everyone (${targetProfiles.length})`;
+
+    if (phones.length > 0) {
+      await sendBulkNotification(form.notificationChannel, phones, message, groupLabel);
+    } else if (targetProfiles.length > 0) {
+      toast({ title: `Task${taskList.length > 1 ? 's' : ''} assigned`, description: `In-app notification sent. No phone numbers found for ${groupLabel}.` });
     }
 
-    toast({ title: 'Task created', description: `Assigned to ${assignee.name}` });
+    if (phones.length > 0) {
+      toast({ title: `Task${taskList.length > 1 ? 's' : ''} assigned`, description: `Assigned to ${groupLabel}` });
+    }
+
     setShowDialog(false);
-    setForm({ title: '', description: '', assignedTo: '', priority: 'Medium', dueDate: '', notificationChannel: 'WhatsApp', phone: '' });
+    setForm(EMPTY_FORM);
     setSaving(false);
   };
 
@@ -423,12 +511,13 @@ export default function Tasks() {
 
       {/* Assign Task Dialog */}
       <Dialog open={showDialog} onOpenChange={setShowDialog}>
-        <DialogContent className="bg-navy-900 border-navy-700 text-white max-w-lg">
+        <DialogContent className="bg-navy-900 border-navy-700 text-white max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-white">Assign New Task</DialogTitle>
           </DialogHeader>
 
           <div className="space-y-4 py-2">
+            {/* Title */}
             <div className="space-y-1.5">
               <Label className="text-navy-300">Task Title *</Label>
               <Input
@@ -439,39 +528,104 @@ export default function Tasks() {
               />
             </div>
 
+            {/* Description */}
             <div className="space-y-1.5">
               <Label className="text-navy-300">Description</Label>
               <Textarea
                 value={form.description}
                 onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
                 placeholder="Additional details…"
-                rows={3}
+                rows={2}
                 className="bg-navy-800 border-navy-600 text-white placeholder:text-navy-500 resize-none"
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            {/* Assignment mode */}
+            <div className="space-y-2">
+              <Label className="text-navy-300">Assign To</Label>
+              <div className="grid grid-cols-3 gap-2">
+                {([
+                  { value: 'individual', label: 'Individual', desc: 'One person' },
+                  { value: 'group', label: 'By Role', desc: 'All of a role' },
+                  { value: 'all', label: 'Everyone', desc: `${assignableProfiles.length} people` },
+                ] as { value: AssignMode; label: string; desc: string }[]).map(m => (
+                  <button
+                    key={m.value}
+                    type="button"
+                    onClick={() => setForm(f => ({ ...f, assignMode: m.value, assignedTo: '', targetRole: '' }))}
+                    className={cn(
+                      'flex flex-col items-center py-2.5 px-2 rounded-lg border text-sm font-medium transition-colors',
+                      form.assignMode === m.value
+                        ? 'bg-gold-500/20 border-gold-500/50 text-gold-400'
+                        : 'bg-navy-800 border-navy-600 text-navy-400 hover:border-navy-500'
+                    )}
+                  >
+                    <span>{m.label}</span>
+                    <span className="text-[10px] opacity-60 mt-0.5">{m.desc}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Individual picker */}
+            {form.assignMode === 'individual' && (
               <div className="space-y-1.5">
-                <Label className="text-navy-300">Assign To *</Label>
-                <Select value={form.assignedTo} onValueChange={handleAssigneeChange}>
+                <Label className="text-navy-300">Select Person *</Label>
+                <Select value={form.assignedTo} onValueChange={v => setForm(f => ({ ...f, assignedTo: v }))}>
                   <SelectTrigger className="bg-navy-800 border-navy-600 text-white">
                     <SelectValue placeholder="Select person" />
                   </SelectTrigger>
                   <SelectContent className="bg-navy-800 border-navy-700">
-                    {assignableProfiles.length === 0 ? (
-                      <SelectItem value="_none" disabled>No users available</SelectItem>
-                    ) : (
-                      assignableProfiles.map(p => (
+                    {assignableProfiles.length === 0
+                      ? <SelectItem value="_none" disabled>No users available</SelectItem>
+                      : assignableProfiles.map(p => (
                         <SelectItem key={p.id} value={p.id} className="text-white focus:bg-navy-700">
-                          <span>{p.name}</span>
-                          <span className="text-navy-400 text-xs ml-2">({p.role})</span>
+                          {p.name} <span className="text-navy-400 text-xs ml-1">({p.role})</span>
                         </SelectItem>
-                      ))
-                    )}
+                      ))}
                   </SelectContent>
                 </Select>
               </div>
+            )}
 
+            {/* Role picker */}
+            {form.assignMode === 'group' && (
+              <div className="space-y-1.5">
+                <Label className="text-navy-300">Select Role *</Label>
+                <Select value={form.targetRole} onValueChange={v => setForm(f => ({ ...f, targetRole: v as UserRole }))}>
+                  <SelectTrigger className="bg-navy-800 border-navy-600 text-white">
+                    <SelectValue placeholder="Select role" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-navy-800 border-navy-700">
+                    {assignableRoles.length === 0
+                      ? <SelectItem value="_none" disabled>No roles available</SelectItem>
+                      : assignableRoles.map(r => {
+                        const count = assignableProfiles.filter(p => p.role === r).length;
+                        return (
+                          <SelectItem key={r} value={r} className="text-white focus:bg-navy-700">
+                            {r} <span className="text-navy-400 text-xs ml-1">({count} {count === 1 ? 'person' : 'people'})</span>
+                          </SelectItem>
+                        );
+                      })}
+                  </SelectContent>
+                </Select>
+                {form.targetRole && (
+                  <p className="text-xs text-navy-400">
+                    Will assign to {assignableProfiles.filter(p => p.role === form.targetRole).length} {form.targetRole}(s)
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Everyone summary */}
+            {form.assignMode === 'all' && (
+              <div className="bg-navy-800 border border-navy-700 rounded-lg px-3 py-2.5 text-sm text-navy-300">
+                Task will be assigned to all <span className="text-white font-medium">{assignableProfiles.length} people</span> below your role.
+              </div>
+            )}
+
+            {/* Priority & Due Date */}
+            <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label className="text-navy-300">Priority</Label>
                 <Select value={form.priority} onValueChange={v => setForm(f => ({ ...f, priority: v as TaskPriority }))}>
@@ -485,18 +639,18 @@ export default function Tasks() {
                   </SelectContent>
                 </Select>
               </div>
+              <div className="space-y-1.5">
+                <Label className="text-navy-300">Due Date</Label>
+                <Input
+                  type="date"
+                  value={form.dueDate}
+                  onChange={e => setForm(f => ({ ...f, dueDate: e.target.value }))}
+                  className="bg-navy-800 border-navy-600 text-white"
+                />
+              </div>
             </div>
 
-            <div className="space-y-1.5">
-              <Label className="text-navy-300">Due Date</Label>
-              <Input
-                type="date"
-                value={form.dueDate}
-                onChange={e => setForm(f => ({ ...f, dueDate: e.target.value }))}
-                className="bg-navy-800 border-navy-600 text-white"
-              />
-            </div>
-
+            {/* Notification channel */}
             <div className="space-y-2">
               <Label className="text-navy-300">Send Notification Via</Label>
               <div className="flex gap-3">
@@ -514,32 +668,14 @@ export default function Tasks() {
                         : 'bg-navy-800 border-navy-600 text-navy-400 hover:border-navy-500'
                     )}
                   >
-                    {ch === 'WhatsApp'
-                      ? <MessageCircle className="w-4 h-4" />
-                      : <Smartphone className="w-4 h-4" />}
+                    {ch === 'WhatsApp' ? <MessageCircle className="w-4 h-4" /> : <Smartphone className="w-4 h-4" />}
                     {ch}
                   </button>
                 ))}
               </div>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label className="text-navy-300">
-                Recipient Phone Number
-                <span className="text-navy-500 font-normal ml-1">(for notification)</span>
-              </Label>
-              <Input
-                value={form.phone}
-                onChange={e => setForm(f => ({ ...f, phone: e.target.value }))}
-                placeholder={form.notificationChannel === 'WhatsApp' ? '+233 XX XXX XXXX' : '0XX XXX XXXX'}
-                className="bg-navy-800 border-navy-600 text-white placeholder:text-navy-500"
-              />
-              {form.notificationChannel === 'WhatsApp' && form.phone && (
-                <p className="text-xs text-navy-500">WhatsApp will open with a pre-filled message for you to send.</p>
-              )}
-              {form.notificationChannel === 'SMS' && form.phone && (
-                <p className="text-xs text-navy-500">SMS will be logged in the Automation module.</p>
-              )}
+              <p className="text-xs text-navy-500">
+                Phone numbers are auto-matched from member records by email.
+              </p>
             </div>
           </div>
 
@@ -552,7 +688,11 @@ export default function Tasks() {
               disabled={saving}
               className="bg-gold-500 hover:bg-gold-400 text-navy-900 font-semibold"
             >
-              {saving ? 'Saving…' : 'Assign Task'}
+              {saving
+                ? 'Saving…'
+                : targetProfiles.length > 1
+                  ? `Assign to ${targetProfiles.length} people`
+                  : 'Assign Task'}
             </Button>
           </DialogFooter>
         </DialogContent>
