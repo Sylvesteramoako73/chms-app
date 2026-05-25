@@ -21,6 +21,7 @@ import {
   MessageCircle, Smartphone, User, ChevronDown, Send,
 } from 'lucide-react';
 import { cn } from '@/utils';
+import { API_BASE } from '@/lib/api';
 
 // ── Role assignment hierarchy ──────────────────────────────────────────────
 const ASSIGNABLE_ROLES: Record<UserRole, UserRole[]> = {
@@ -72,11 +73,18 @@ function TaskCard({
   currentUserId: string;
   onStatusChange: (id: string, s: TaskStatus) => void;
   onDelete: (id: string) => void;
-  onNotify: (task: Task) => void;
+  onNotify: (task: Task) => Promise<void>;
 }) {
+  const [notifying, setNotifying] = useState(false);
   const StatusIcon = STATUS_ICONS[task.status];
   const isAssigner = task.assignedBy === currentUserId;
   const overdue = task.dueDate && task.status !== 'Completed' && isPast(parseISO(task.dueDate + 'T23:59:59'));
+
+  const handleNotify = async () => {
+    setNotifying(true);
+    await onNotify(task);
+    setNotifying(false);
+  };
 
   return (
     <motion.div
@@ -141,11 +149,12 @@ function TaskCard({
             <Button
               size="sm"
               variant="ghost"
-              onClick={() => onNotify(task)}
+              onClick={handleNotify}
+              disabled={notifying}
               className="h-7 w-7 p-0 text-navy-400 hover:text-green-400"
               title={`Re-send via ${task.notificationChannel}`}
             >
-              <Send className="w-3.5 h-3.5" />
+              <Send className={cn('w-3.5 h-3.5', notifying && 'animate-pulse')} />
             </Button>
           )}
 
@@ -204,30 +213,59 @@ export default function Tasks() {
     assigned: assignedTasks.length,
   }), [myTasks, assignedTasks]);
 
-  const sendNotification = (task: Task) => {
+  const sendNotification = async (task: Task): Promise<void> => {
     if (!task.assignedToPhone) return;
     const message = buildMessage(task, profile?.name ?? 'Your Pastor');
+    const phone = task.assignedToPhone.replace(/\D/g, '');
 
     if (task.notificationChannel === 'WhatsApp') {
-      const phone = task.assignedToPhone.replace(/\D/g, '');
-      window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, '_blank');
+      try {
+        const statusRes = await fetch(`${API_BASE}/api/whatsapp/status`);
+        const { status } = await statusRes.json() as { status: string };
+        if (status !== 'connected') {
+          toast({ title: 'WhatsApp not connected', description: 'Connect WhatsApp in the Communication page first.', variant: 'destructive' });
+          return;
+        }
+        const res = await fetch(`${API_BASE}/api/whatsapp/send`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ number: phone, message }),
+        });
+        if (!res.ok) throw new Error('Send failed');
+        toast({ title: 'WhatsApp sent', description: `Message delivered to ${task.assignedToName}` });
+      } catch {
+        toast({ title: 'WhatsApp send failed', description: 'Check that the WhatsApp server is running.', variant: 'destructive' });
+      }
     } else {
-      // SMS: log to reminder logs in localStorage
-      const LOGS_KEY = 'chms_reminder_logs';
-      const existing = (() => { try { return JSON.parse(localStorage.getItem(LOGS_KEY) ?? '[]'); } catch { return []; } })();
-      const newLog = {
-        id: `log_task_${Date.now()}`,
-        templateName: 'Task Assignment',
-        recipientName: task.assignedToName,
-        recipientContact: task.assignedToPhone,
-        channel: 'SMS',
-        type: 'Custom',
-        message,
-        sentAt: new Date().toISOString(),
-        status: 'Sent',
-      };
-      localStorage.setItem(LOGS_KEY, JSON.stringify([newLog, ...existing]));
-      toast({ title: 'SMS logged', description: `SMS to ${task.assignedToName} logged in Automation.` });
+      // SMS via mNotify
+      let smsSettings = { apiKey: '', senderId: 'ChurchCare' };
+      try { smsSettings = { ...smsSettings, ...JSON.parse(localStorage.getItem('chms_sms_settings') ?? '{}') }; } catch { /* */ }
+      if (!smsSettings.apiKey.trim()) {
+        toast({ title: 'SMS API key not set', description: 'Add your mNotify API key in the Communication settings.', variant: 'destructive' });
+        return;
+      }
+      try {
+        const url = `https://api.mnotify.com/api/sms/quick?key=${encodeURIComponent(smsSettings.apiKey.trim())}`;
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            recipient: [phone],
+            sender: (smsSettings.senderId || 'ChurchCare').slice(0, 11),
+            message,
+            is_schedule: false,
+            schedule_date: '',
+          }),
+        });
+        const data = await res.json() as { status?: string; code?: string };
+        if (data.code === '2000' || data.status === 'success') {
+          toast({ title: 'SMS sent', description: `SMS delivered to ${task.assignedToName}` });
+        } else {
+          throw new Error(JSON.stringify(data));
+        }
+      } catch {
+        toast({ title: 'SMS send failed', description: 'Check your mNotify API key and balance.', variant: 'destructive' });
+      }
     }
   };
 
@@ -282,7 +320,7 @@ export default function Tasks() {
 
     // Send WhatsApp / SMS notification
     if (form.phone.trim()) {
-      sendNotification({ ...newTask, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
+      await sendNotification({ ...newTask, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
     }
 
     toast({ title: 'Task created', description: `Assigned to ${assignee.name}` });
