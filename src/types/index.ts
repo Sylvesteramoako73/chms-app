@@ -470,3 +470,28 @@ export interface CellReport {
   prayerPoints?: string;
   createdAt: string;
 }
+
+// ============================================================
+// TASK ASSIGNMENT
+// ============================================================
+export type TaskStatus = 'Pending' | 'In Progress' | 'Completed' | 'Overdue';
+export type TaskPriority = 'Low' | 'Medium' | 'High' | 'Urgent';
+export type TaskNotificationChannel = 'WhatsApp' | 'SMS';
+
+export interface Task {
+  id: string;
+  title: string;
+  description?: string;
+  assignedTo: string;
+  assignedToName: string;
+  assignedToPhone?: string;
+  assignedBy: string;
+  assignedByName: string;
+  status: TaskStatus;
+  priority: TaskPriority;
+  dueDate?: string;
+  notificationChannel: TaskNotificationChannel;
+  notificationSent: boolean;
+  createdAt: string;
+  updatedAt: string;
+}

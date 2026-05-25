@@ -7,24 +7,24 @@ const ROLE_ACCESS: Record<UserRole, string[]> = {
     '/', '/members', '/attendance', '/giving', '/events', '/departments',
     '/communication', '/reports', '/settings', '/prayer', '/pastoral',
     '/volunteers', '/pledges', '/visitors', '/outreach', '/assets',
-    '/workers', '/automation', '/children', '/media', '/cells',
+    '/workers', '/automation', '/children', '/media', '/cells', '/tasks',
   ],
   'Branch Pastor': [
     '/', '/members', '/attendance', '/giving', '/communication',
     '/reports', '/prayer', '/pastoral', '/volunteers', '/pledges', '/events', '/visitors', '/outreach', '/assets',
-    '/workers', '/children', '/media', '/cells',
+    '/workers', '/children', '/media', '/cells', '/tasks',
   ],
   Pastor: [
     '/', '/members', '/attendance', '/giving', '/communication',
     '/reports', '/prayer', '/pastoral', '/volunteers', '/pledges', '/events', '/visitors', '/outreach', '/assets',
-    '/workers', '/automation', '/children', '/media', '/cells',
+    '/workers', '/automation', '/children', '/media', '/cells', '/tasks',
   ],
   'Department Head': [
     '/', '/members', '/attendance', '/events', '/prayer', '/volunteers', '/outreach', '/assets',
-    '/workers', '/children', '/media', '/cells',
+    '/workers', '/children', '/media', '/cells', '/tasks',
   ],
   'Data Entry': [
-    '/', '/attendance', '/giving', '/children',
+    '/', '/attendance', '/giving', '/children', '/tasks',
   ],
 };
 
