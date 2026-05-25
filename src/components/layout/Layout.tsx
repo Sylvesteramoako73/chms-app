@@ -21,6 +21,7 @@ const PAGE_TITLES: Record<string, string> = {
   '/communication': 'Communication',
   '/reports': 'Reports',
   '/settings': 'Settings',
+  '/tasks': 'Task Assignment',
 };
 
 // ── Notification Bell ──────────────────────────────────────────────────────

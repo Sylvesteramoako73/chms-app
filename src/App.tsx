@@ -25,6 +25,7 @@ import Automation from './pages/Automation';
 import ChildCheckin from './pages/ChildCheckin';
 import Media from './pages/Media';
 import CellGroups from './pages/CellGroups';
+import Tasks from './pages/Tasks';
 
 function LoadingScreen() {
   return (
@@ -66,6 +67,7 @@ function AppRoutes() {
         <Route path="children" element={<ChildCheckin />} />
         <Route path="media" element={<Media />} />
         <Route path="cells" element={<CellGroups />} />
+        <Route path="tasks" element={<Tasks />} />
       </Route>
     </Routes>
   );

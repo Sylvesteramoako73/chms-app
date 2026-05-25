@@ -5,6 +5,7 @@ import {
   CalendarDays, Settings, MessageSquare, PieChart, Building2, X,
   Heart, HeartHandshake, ClipboardList, Target, LogOut, Church, UserPlus,
   UserCheck, BellRing, Baby, PlayCircle, Network, Megaphone, Boxes, ChevronDown,
+  ListTodo,
 } from 'lucide-react';
 import { cn } from '@/utils';
 import { useRole, type UserRole } from '@/context/RoleContext';
@@ -30,6 +31,7 @@ const navItems = [
   { name: 'Cell Groups', path: '/cells', icon: Network },
   { name: 'Child Check-In', path: '/children', icon: Baby },
   { name: 'Media Library', path: '/media', icon: PlayCircle },
+  { name: 'Task Assignment', path: '/tasks', icon: ListTodo },
   { name: 'Automation', path: '/automation', icon: BellRing },
   { name: 'Communication', path: '/communication', icon: MessageSquare },
   { name: 'Reports', path: '/reports', icon: PieChart },
