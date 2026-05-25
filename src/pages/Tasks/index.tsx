@@ -372,8 +372,9 @@ export default function Tasks() {
       assignedToPhone: getPhone(p.email),
     }));
 
-    const insertFn = taskList.length === 1 ? addTask : addTasksBulk;
-    const error = await (insertFn as typeof addTasksBulk)(taskList);
+    const error = taskList.length === 1
+      ? await addTask(taskList[0])
+      : await addTasksBulk(taskList);
     if (error) {
       toast({ title: 'Failed to create tasks', description: error.message, variant: 'destructive' });
       setSaving(false);
