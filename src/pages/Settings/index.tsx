@@ -40,10 +40,9 @@ const ROLE_BADGE: Record<UserRole, string> = {
 
 export default function Settings() {
   const { theme, toggleTheme, departments, campuses, auditLogs, addCampus, updateCampus, deleteCampus } = useData();
-  const { profile, allProfiles, updateUserRole, updateUserProfile, createUser, deleteUser, refreshProfiles } = useAuth();
+  const { profile, allProfiles, updateUserProfile, createUser, deleteUser, refreshProfiles } = useAuth();
   const { actions } = useRole();
   const { toast } = useToast();
-  const [updatingRole, setUpdatingRole] = useState<string | null>(null);
   const [addUserOpen, setAddUserOpen] = useState(false);
   const [addUserForm, setAddUserForm] = useState({ name: '', email: '', password: '', phone: '', role: 'Data Entry' as UserRole });
   const [addUserBranchId, setAddUserBranchId] = useState('');
@@ -128,14 +127,6 @@ export default function Settings() {
     const ok = deleteCampus(c.id);
     if (!ok) toast({ title: 'Cannot delete', description: 'Members are assigned to this branch.', variant: 'destructive' });
     else toast({ title: 'Branch deleted' });
-  };
-
-  const handleRoleChange = async (userId: string, role: UserRole) => {
-    setUpdatingRole(userId);
-    const { error } = await updateUserRole(userId, role);
-    setUpdatingRole(null);
-    if (error) toast({ title: 'Error', description: error, variant: 'destructive' });
-    else toast({ title: 'Role updated', description: 'User role has been changed.' });
   };
 
   const handleAddUser = async () => {
