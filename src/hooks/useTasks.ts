@@ -61,6 +61,13 @@ export function useTasks(currentUserId?: string) {
     return error;
   }, []);
 
+  const addTasksBulk = useCallback(async (taskList: Omit<Task, 'createdAt' | 'updatedAt'>[]) => {
+    const rows = taskList.map(toTaskRow);
+    const { data, error } = await supabase.from('tasks').insert(rows).select();
+    if (!error && data) setTasks(prev => [...data.map(mapTask), ...prev]);
+    return error;
+  }, []);
+
   const updateStatus = useCallback(async (id: string, status: TaskStatus) => {
     const { error } = await supabase
       .from('tasks')
@@ -81,5 +88,5 @@ export function useTasks(currentUserId?: string) {
     setTasks(prev => prev.map(t => t.id === id ? { ...t, notificationSent: true } : t));
   }, []);
 
-  return { tasks, loading, addTask, updateStatus, deleteTask, markNotificationSent, reload: load };
+  return { tasks, loading, addTask, addTasksBulk, updateStatus, deleteTask, markNotificationSent, reload: load };
 }
