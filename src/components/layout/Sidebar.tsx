@@ -13,29 +13,69 @@ import { useAuth } from '@/context/AuthContext';
 import { useData } from '@/context/DataContext';
 import { useCampus } from '@/context/CampusContext';
 
-const navItems = [
-  { name: 'Dashboard', path: '/', icon: LayoutDashboard },
-  { name: 'Members', path: '/members', icon: Users },
-  { name: 'Attendance', path: '/attendance', icon: CalendarCheck },
-  { name: 'Tithes & Giving', path: '/giving', icon: Coins },
-  { name: 'Events', path: '/events', icon: CalendarDays },
-  { name: 'Departments', path: '/departments', icon: Building2 },
-  { name: 'Prayer Requests', path: '/prayer', icon: Heart },
-  { name: 'Pastoral Care', path: '/pastoral', icon: HeartHandshake },
-  { name: 'Volunteers', path: '/volunteers', icon: ClipboardList },
-  { name: 'Pledges', path: '/pledges', icon: Target },
-  { name: 'Visitor Follow-up', path: '/visitors', icon: UserPlus },
-  { name: 'Outreach & Evangelism', path: '/outreach', icon: Megaphone },
-  { name: 'Assets & Facilities', path: '/assets', icon: Boxes },
-  { name: 'Workers', path: '/workers', icon: UserCheck },
-  { name: 'Cell Groups', path: '/cells', icon: Network },
-  { name: 'Child Check-In', path: '/children', icon: Baby },
-  { name: 'Media Library', path: '/media', icon: PlayCircle },
-  { name: 'Task Assignment', path: '/tasks', icon: ListTodo },
-  { name: 'Automation', path: '/automation', icon: BellRing },
-  { name: 'Communication', path: '/communication', icon: MessageSquare },
-  { name: 'Reports', path: '/reports', icon: PieChart },
-  { name: 'Settings', path: '/settings', icon: Settings },
+const navGroups = [
+  {
+    label: null,
+    items: [
+      { name: 'Dashboard', path: '/', icon: LayoutDashboard },
+    ],
+  },
+  {
+    label: 'People',
+    items: [
+      { name: 'Members', path: '/members', icon: Users },
+      { name: 'Workers', path: '/workers', icon: UserCheck },
+      { name: 'Child Check-In', path: '/children', icon: Baby },
+      { name: 'Visitor Follow-up', path: '/visitors', icon: UserPlus },
+    ],
+  },
+  {
+    label: 'Ministry',
+    items: [
+      { name: 'Attendance', path: '/attendance', icon: CalendarCheck },
+      { name: 'Events', path: '/events', icon: CalendarDays },
+      { name: 'Departments', path: '/departments', icon: Building2 },
+      { name: 'Cell Groups', path: '/cells', icon: Network },
+      { name: 'Volunteers', path: '/volunteers', icon: ClipboardList },
+    ],
+  },
+  {
+    label: 'Finance',
+    items: [
+      { name: 'Tithes & Giving', path: '/giving', icon: Coins },
+      { name: 'Pledges', path: '/pledges', icon: Target },
+    ],
+  },
+  {
+    label: 'Care & Outreach',
+    items: [
+      { name: 'Prayer Requests', path: '/prayer', icon: Heart },
+      { name: 'Pastoral Care', path: '/pastoral', icon: HeartHandshake },
+      { name: 'Outreach & Evangelism', path: '/outreach', icon: Megaphone },
+    ],
+  },
+  {
+    label: 'Communication',
+    items: [
+      { name: 'Communication', path: '/communication', icon: MessageSquare },
+      { name: 'Task Assignment', path: '/tasks', icon: ListTodo },
+      { name: 'Automation', path: '/automation', icon: BellRing },
+    ],
+  },
+  {
+    label: 'Resources',
+    items: [
+      { name: 'Assets & Facilities', path: '/assets', icon: Boxes },
+      { name: 'Media Library', path: '/media', icon: PlayCircle },
+    ],
+  },
+  {
+    label: 'Admin',
+    items: [
+      { name: 'Reports', path: '/reports', icon: PieChart },
+      { name: 'Settings', path: '/settings', icon: Settings },
+    ],
+  },
 ];
 
 const ROLE_BADGE: Record<UserRole, string> = {
@@ -57,7 +97,9 @@ function SidebarContent({ onClose }: { onClose: () => void }) {
   const { campuses } = useData();
   const { selectedCampusId, setSelectedCampusId, isLocked } = useCampus();
 
-  const visibleNav = navItems.filter(item => canAccess(item.path));
+  const visibleGroups = navGroups
+    .map(g => ({ ...g, items: g.items.filter(item => canAccess(item.path)) }))
+    .filter(g => g.items.length > 0);
   const initials = profile?.name
     ? profile.name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase()
     : '?';
@@ -113,32 +155,43 @@ function SidebarContent({ onClose }: { onClose: () => void }) {
       )}
 
       {/* Nav */}
-      <nav className="flex-1 px-4 space-y-0.5 overflow-y-auto">
-        {visibleNav.map(item => (
-          <NavLink
-            key={item.path}
-            to={item.path}
-            end={item.path === '/'}
-            onClick={onClose}
-            className={({ isActive }) =>
-              cn(
-                'flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-150 group relative text-sm font-medium',
-                isActive
-                  ? 'bg-navy-800 text-white'
-                  : 'text-navy-300 hover:bg-navy-800/60 hover:text-white'
-              )
-            }
-          >
-            {({ isActive }) => (
-              <>
-                {isActive && (
-                  <span className="absolute left-0 top-2 bottom-2 w-0.5 bg-gold-500 rounded-r-full" />
-                )}
-                <item.icon className={cn('w-4 h-4 shrink-0', isActive ? 'text-gold-400' : 'text-navy-500 group-hover:text-navy-300')} />
-                {item.name}
-              </>
+      <nav className="flex-1 px-4 overflow-y-auto space-y-4 pb-2">
+        {visibleGroups.map(group => (
+          <div key={group.label ?? '__top'}>
+            {group.label && (
+              <p className="px-3 mb-1 text-[10px] font-bold uppercase tracking-widest text-navy-600">
+                {group.label}
+              </p>
             )}
-          </NavLink>
+            <div className="space-y-0.5">
+              {group.items.map(item => (
+                <NavLink
+                  key={item.path}
+                  to={item.path}
+                  end={item.path === '/'}
+                  onClick={onClose}
+                  className={({ isActive }) =>
+                    cn(
+                      'flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-150 group relative text-sm font-medium',
+                      isActive
+                        ? 'bg-navy-800 text-white'
+                        : 'text-navy-300 hover:bg-navy-800/60 hover:text-white'
+                    )
+                  }
+                >
+                  {({ isActive }) => (
+                    <>
+                      {isActive && (
+                        <span className="absolute left-0 top-2 bottom-2 w-0.5 bg-gold-500 rounded-r-full" />
+                      )}
+                      <item.icon className={cn('w-4 h-4 shrink-0', isActive ? 'text-gold-400' : 'text-navy-500 group-hover:text-navy-300')} />
+                      {item.name}
+                    </>
+                  )}
+                </NavLink>
+              ))}
+            </div>
+          </div>
         ))}
       </nav>
 
