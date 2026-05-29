@@ -310,6 +310,9 @@ app.get('/api/sms/balance', async (req, res) => {
   }
 });
 
+// ── Health check (keeps Render free tier awake via UptimeRobot) ───────────────
+app.get('/health', (_req, res) => res.json({ ok: true, ts: Date.now() }));
+
 // ── Start + auto-reconnect saved sessions ─────────────────────────────────────
 app.listen(PORT, () => {
   console.log(`[ChurchCare] WhatsApp server on http://localhost:${PORT}`);
