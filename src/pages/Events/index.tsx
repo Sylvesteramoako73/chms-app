@@ -108,7 +108,7 @@ export default function Events() {
 
   const handleNotifyWA = async () => {
     setSending('wa');
-    await sendWhatsApp(getRecipientPhones(), notifyMessage, ({ title, description, variant }) =>
+    sendWhatsApp(getRecipientPhones(), notifyMessage, ({ title, description, variant }) =>
       toast({ title, description, variant })
     );
     setSending(null);

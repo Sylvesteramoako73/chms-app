@@ -1,3 +1,4 @@
+import React from 'react';
 import { Routes, Route } from 'react-router-dom';
 import { useBirthdayWA } from './hooks/useBirthdayWA';
 import { Layout } from './components/layout/Layout';
@@ -27,15 +28,22 @@ import Media from './pages/Media';
 import CellGroups from './pages/CellGroups';
 import Tasks from './pages/Tasks';
 import WhatsApp from './pages/WhatsApp';
+import Accounting from './pages/Accounting';
+import Upgrade from './pages/Upgrade';
+import { UpgradePrompt } from './components/UpgradePrompt';
+import { usePackage, type PlanFeatures } from './context/PackageContext';
+
+function PlanGate({ feature, children }: { feature: keyof PlanFeatures; children: React.ReactNode }) {
+  const { hasFeature } = usePackage();
+  if (!hasFeature(feature)) return <UpgradePrompt feature={feature} />;
+  return <>{children}</>;
+}
 
 function LoadingScreen() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-navy-900">
+    <div className="flex min-h-screen items-center justify-center bg-white">
       <div className="text-center space-y-4">
-        <div className="w-12 h-12 bg-gold-500 rounded-sm flex items-center justify-center mx-auto animate-pulse">
-          <span className="font-bold text-2xl text-navy-900">C</span>
-        </div>
-        <p className="text-navy-300 text-sm">Loading ChurchCare…</p>
+        <img src="/logo.png" alt="Faith ChurchCare" className="w-48 h-auto mx-auto animate-pulse" />
       </div>
     </div>
   );
@@ -53,33 +61,35 @@ function AppRoutes() {
         <Route path="giving" element={<Giving />} />
         <Route path="events" element={<Events />} />
         <Route path="departments" element={<Departments />} />
-        <Route path="communication" element={<Communication />} />
+        <Route path="communication" element={<PlanGate feature="bulkMessaging"><Communication /></PlanGate>} />
         <Route path="reports" element={<Reports />} />
         <Route path="settings" element={<Settings />} />
-        <Route path="prayer" element={<PrayerRequests />} />
-        <Route path="pastoral" element={<PastoralCare />} />
-        <Route path="volunteers" element={<Volunteers />} />
-        <Route path="pledges" element={<Pledges />} />
+        <Route path="prayer" element={<PlanGate feature="prayerPastoral"><PrayerRequests /></PlanGate>} />
+        <Route path="pastoral" element={<PlanGate feature="prayerPastoral"><PastoralCare /></PlanGate>} />
+        <Route path="volunteers" element={<PlanGate feature="volunteers"><Volunteers /></PlanGate>} />
+        <Route path="pledges" element={<PlanGate feature="pledges"><Pledges /></PlanGate>} />
         <Route path="visitors" element={<Visitors />} />
         <Route path="outreach" element={<Outreach />} />
         <Route path="assets" element={<Assets />} />
         <Route path="workers" element={<Workers />} />
-        <Route path="automation" element={<Automation />} />
+        <Route path="automation" element={<PlanGate feature="bulkMessaging"><Automation /></PlanGate>} />
         <Route path="children" element={<ChildCheckin />} />
         <Route path="media" element={<Media />} />
         <Route path="cells" element={<CellGroups />} />
         <Route path="tasks" element={<Tasks />} />
-        <Route path="whatsapp" element={<WhatsApp />} />
+        <Route path="whatsapp" element={<PlanGate feature="bulkMessaging"><WhatsApp /></PlanGate>} />
+        <Route path="accounting" element={<PlanGate feature="accounting"><Accounting /></PlanGate>} />
+        <Route path="upgrade" element={<Upgrade />} />
       </Route>
     </Routes>
   );
 }
 
 function App() {
-  const { user, loading } = useAuth();
+  const { user, loading, isDemo } = useAuth();
 
   if (loading) return <LoadingScreen />;
-  if (!user) return <AuthPage />;
+  if (!user && !isDemo) return <AuthPage />;
 
   return <AppRoutes />;
 }

@@ -1,4 +1,4 @@
-import { API_BASE } from '@/lib/api';
+import { openWhatsAppBroadcast } from '@/lib/whatsapp';
 
 export function normaliseMsisdn(raw: string): string {
   let n = raw.replace(/\D/g, '');
@@ -56,32 +56,20 @@ export async function sendSMS(
   }
 }
 
-export async function sendWhatsApp(
+/**
+ * Opens WhatsApp with the message pre-filled so the admin can choose
+ * which contact or group to send to. No API key or setup required.
+ */
+export function sendWhatsApp(
   phones: string[],
   text: string,
   onToast: (t: { title: string; description?: string; variant?: 'destructive' }) => void,
-): Promise<boolean> {
+): boolean {
   if (phones.length === 0) {
-    onToast({ title: 'No phone numbers', description: 'None of the selected recipients have a phone number.', variant: 'destructive' });
+    onToast({ title: 'No recipients', description: 'No phone numbers found for the selected group.', variant: 'destructive' });
     return false;
   }
-  try {
-    const res = await fetch(`${API_BASE}/api/whatsapp/send-bulk`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ numbers: phones, message: text }),
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error ?? 'Send failed');
-    onToast({ title: 'WhatsApp messages sent', description: `${data.sent} delivered, ${data.failed} failed.` });
-    return true;
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : 'Unknown error';
-    if (msg.includes('not connected')) {
-      onToast({ title: 'WhatsApp not connected', description: 'Go to Settings → WhatsApp to scan the QR code first.', variant: 'destructive' });
-    } else {
-      onToast({ title: 'Send failed', description: msg, variant: 'destructive' });
-    }
-    return false;
-  }
+  openWhatsAppBroadcast(text);
+  onToast({ title: 'WhatsApp opened', description: 'Pick your church group in WhatsApp and tap Send.' });
+  return true;
 }

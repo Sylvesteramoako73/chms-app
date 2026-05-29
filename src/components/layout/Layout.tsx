@@ -6,7 +6,7 @@ import { Toaster } from '@/components/ui/toaster';
 import { useData } from '@/context/DataContext';
 import { useRole } from '@/context/RoleContext';
 import { useAuth } from '@/context/AuthContext';
-import { Menu, Moon, Sun, ShieldOff, Bell, X, Trash2 } from 'lucide-react';
+import { Menu, Moon, Sun, ShieldOff, Bell, X, Trash2, PlayCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { format, parseISO } from 'date-fns';
 import { cn } from '@/utils';
@@ -134,6 +134,7 @@ export function Layout() {
   const { theme, toggleTheme, loading } = useData();
   const location = useLocation();
   const { canAccess, role } = useRole();
+  const { signOut, isDemo } = useAuth();
 
   const basePath = '/' + location.pathname.split('/')[1];
   if (basePath !== '/' && !canAccess(basePath)) {
@@ -192,6 +193,24 @@ export function Layout() {
             {theme === 'dark' ? <Sun className="w-4 h-4 text-gold-400" /> : <Moon className="w-4 h-4" />}
           </Button>
         </div>
+
+        {/* Demo banner */}
+        {isDemo && (
+          <div className="flex items-center justify-between gap-3 px-4 py-2.5 bg-gold-500 text-navy-950 text-sm font-medium">
+            <div className="flex items-center gap-2">
+              <PlayCircle className="w-4 h-4 shrink-0" />
+              <span>You're exploring in <strong>Demo Mode</strong> — data resets periodically.</span>
+            </div>
+            <div className="flex items-center gap-3 shrink-0">
+              <button
+                onClick={() => signOut()}
+                className="underline underline-offset-2 text-navy-900 hover:text-navy-700 text-xs font-semibold transition-colors"
+              >
+                Sign up free
+              </button>
+            </div>
+          </div>
+        )}
 
         <main className="flex-1 overflow-x-hidden p-4 sm:p-6 lg:p-8">
           <div className="max-w-7xl mx-auto">

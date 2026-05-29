@@ -2,12 +2,14 @@ import { createContext, useContext, useState, useEffect, useCallback, useRef, ty
 import type { User } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 import type { UserRole } from '@/types';
+import { isDemoMode, enterDemo, exitDemo } from '@/demo';
 
 export interface UserProfile {
   id: string;
   name: string;
   email: string;
   role: UserRole;
+  churchId?: string;
   branchId?: string;
   phone?: string;
 }
@@ -16,9 +18,11 @@ interface AuthContextValue {
   user: User | null;
   profile: UserProfile | null;
   loading: boolean;
+  isDemo: boolean;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signUp: (name: string, email: string, password: string, role: UserRole) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
+  startDemo: () => void;
   allProfiles: UserProfile[];
   updateUserRole: (userId: string, role: UserRole, branchId?: string) => Promise<{ error: string | null }>;
   updateUserProfile: (userId: string, updates: { name?: string; phone?: string; role?: UserRole; branchId?: string }) => Promise<{ error: string | null }>;
@@ -26,6 +30,16 @@ interface AuthContextValue {
   deleteUser: (userId: string) => Promise<{ error: string | null }>;
   refreshProfiles: () => Promise<void>;
 }
+
+export const DEMO_EMAIL = 'demo@faithchurchcare.com';
+export const DEMO_PASSWORD = 'DemoChurchCare2024!';
+
+const DEMO_PROFILE: UserProfile = {
+  id: 'demo-user-id',
+  name: 'Demo Admin',
+  email: DEMO_EMAIL,
+  role: 'Administrator',
+};
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
@@ -37,7 +51,8 @@ function profileFromUser(user: User): UserProfile {
   const meta = user.user_metadata ?? {};
   const role: UserRole = isValidRole(meta.role) ? meta.role : 'Data Entry';
   const name: string = typeof meta.name === 'string' && meta.name ? meta.name : (user.email?.split('@')[0] ?? 'User');
-  return { id: user.id, name, email: user.email ?? '', role };
+  const churchId: string | undefined = typeof meta.church_id === 'string' && meta.church_id ? meta.church_id : undefined;
+  return { id: user.id, name, email: user.email ?? '', role, churchId };
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -45,6 +60,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [allProfiles, setAllProfiles] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isDemo, setIsDemo] = useState(() => isDemoMode());
   // Tracks the user ID that is already loaded so SIGNED_IN on tab-focus
   // re-validation (same user) doesn't trigger a redundant profile re-fetch.
   const loadedUserIdRef = useRef<string | null>(null);
@@ -58,31 +74,104 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Always build a fallback from user_metadata first
     const metaProfile = profileFromUser(currentUser);
 
+    // churchId resolution priority:
+    // 1. profiles.church_id (DB — most authoritative after migration)
+    // 2. user_metadata.church_id (JWT — set at signup for all new accounts)
+    // 3. currentUser.id (own ID — every user has this, used as last resort)
+    const resolveChurchId = (dbChurchId: string | null | undefined): string =>
+      dbChurchId ?? currentUser.user_metadata?.church_id ?? currentUser.id;
+
     try {
+      // Try with church_id column (post-migration)
       const { data, error } = await supabase
+        .from('profiles')
+        .select('id, name, email, role, church_id, branch_id, phone')
+        .eq('id', currentUser.id)
+        .single();
+
+      if (!error && data && isValidRole(data.role)) {
+        const churchId = resolveChurchId(data.church_id);
+        setProfile({ id: data.id, name: data.name, email: data.email, role: data.role as UserRole, churchId, branchId: data.branch_id ?? undefined, phone: data.phone ?? undefined });
+        // Backfill missing church_id so the next load is instant
+        if (!data.church_id) {
+          supabase.from('profiles').update({ church_id: churchId }).eq('id', data.id).then(() => {});
+        }
+        return;
+      }
+
+      // Fallback: church_id column may not exist (pre-migration)
+      const { data: d2, error: e2 } = await supabase
         .from('profiles')
         .select('id, name, email, role, branch_id, phone')
         .eq('id', currentUser.id)
         .single();
 
-      if (!error && data && isValidRole(data.role)) {
-        setProfile({ id: data.id, name: data.name, email: data.email, role: data.role as UserRole, branchId: data.branch_id ?? undefined, phone: data.phone ?? undefined });
+      if (!e2 && d2 && isValidRole(d2.role)) {
+        const churchId = resolveChurchId(null);
+        setProfile({ id: d2.id, name: d2.name, email: d2.email, role: d2.role as UserRole, churchId, branchId: d2.branch_id ?? undefined, phone: d2.phone ?? undefined });
         return;
       }
     } catch (_) { /* profiles table may not exist yet */ }
 
-    // Fallback: user_metadata embedded in the JWT
+    // Final fallback: user_metadata only — always resolves to something
+    if (!metaProfile.churchId) metaProfile.churchId = resolveChurchId(null);
     setProfile(metaProfile);
   }, []);
 
   const fetchAllProfiles = useCallback(async () => {
     try {
-      const { data } = await supabase.from('profiles').select('id, name, email, role, branch_id, phone').order('created_at');
-      if (data) setAllProfiles(data.map(r => ({ id: r.id, name: r.name, email: r.email, role: (isValidRole(r.role) ? r.role : 'Data Entry') as UserRole, branchId: r.branch_id ?? undefined, phone: r.phone ?? undefined })));
+      const { data: { session } } = await supabase.auth.getSession();
+      const currentUserId = session?.user?.id;
+      if (!currentUserId) return;
+
+      // 1. Try church_id from JWT user_metadata (set for all new accounts)
+      let churchId: string | undefined = session?.user?.user_metadata?.church_id;
+
+      // 2. Fall back to profiles table (for accounts created before the JWT fix)
+      if (!churchId) {
+        const { data: me } = await supabase
+          .from('profiles').select('church_id').eq('id', currentUserId).single();
+        churchId = me?.church_id ?? undefined;
+      }
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let rows: any[] | null = null;
+      const run = async (cols: string) => {
+        const q = supabase.from('profiles').select(cols).order('created_at');
+        const { data } = await (churchId ? q.eq('church_id', churchId) : q);
+        return data;
+      };
+
+      rows = await run('id, name, email, role, church_id, branch_id, phone');
+      if (!rows) rows = await run('id, name, email, role, branch_id, phone');
+
+      if (rows) setAllProfiles(rows.map(r => ({
+        id: r.id, name: r.name, email: r.email,
+        role: (isValidRole(r.role) ? r.role : 'Data Entry') as UserRole,
+        churchId: r.church_id ?? undefined,
+        branchId: r.branch_id ?? undefined,
+        phone: r.phone ?? undefined,
+      })));
     } catch (_) { /* profiles table may not exist */ }
   }, []);
 
+  // ── Demo mode ─────────────────────────────────────────────────────────────
+  const startDemo = () => {
+    enterDemo();
+    setIsDemo(true);
+    setProfile(DEMO_PROFILE);
+    setLoading(false);
+  };
+
   useEffect(() => {
+    // If demo flag is already set (e.g. page refresh in demo), restore immediately
+    if (isDemoMode()) {
+      setIsDemo(true);
+      setProfile(DEMO_PROFILE);
+      setLoading(false);
+      return;
+    }
+
     supabase.auth.getSession().then(({ data: { session } }) => {
       const u = session?.user ?? null;
       setUser(u);
@@ -145,26 +234,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     const assignedRole: UserRole = isFirstUser ? 'Administrator' : role;
 
-    // ① Create the Supabase Auth user — role & name travel with the JWT via user_metadata
+    // ① Generate a church_id before signup so it's in the JWT regardless of profiles table
+    const newChurchId = crypto.randomUUID();
+
+    // ② Create the Supabase Auth user — role, name, church_id travel with the JWT via user_metadata
     const { data, error } = await supabase.auth.signUp({
       email: trimmedEmail,
       password,
       options: {
-        data: { name: trimmedName, role: assignedRole },   // ← stored in user_metadata
+        data: { name: trimmedName, role: assignedRole, church_id: newChurchId },
       },
     });
     if (error) return { error: error.message };
     if (!data.user) return { error: 'Sign up failed — please try again.' };
 
-    // ② Mirror to profiles table (best-effort — doesn't block login if table is missing)
+    // ③ Mirror to profiles table + seed church_settings (best-effort)
     try {
       await supabase.from('profiles').upsert(
-        { id: data.user.id, name: trimmedName, email: trimmedEmail, role: assignedRole },
+        { id: data.user.id, name: trimmedName, email: trimmedEmail, role: assignedRole, church_id: newChurchId },
         { onConflict: 'id' },
       );
-    } catch (_) { /* profiles table may not exist — role is already safe in user_metadata */ }
+      // Create the church's settings row with the default plan
+      await supabase
+        .from('church_settings')
+        .insert({ church_id: newChurchId, plan: 'free' })
+        .select();
+    } catch (_) { /* tables may not exist yet — church_id is already in user_metadata */ }
 
-    // ③ If Supabase auto-confirmed the session, set profile immediately
+    // ④ If Supabase auto-confirmed the session, set profile immediately
     if (data.session) {
       await fetchProfile(data.user);
       await fetchAllProfiles();
@@ -175,6 +272,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // ── Sign Out ──────────────────────────────────────────────────────────────
   const signOut = async () => {
+    exitDemo();
+    setIsDemo(false);
     await supabase.auth.signOut();
     setUser(null);
     setProfile(null);
@@ -245,15 +344,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { data, error } = await supabase.auth.signUp({
       email: email.trim().toLowerCase(),
       password,
-      options: { data: { name: name.trim(), role } },
+      options: { data: { name: name.trim(), role, church_id: profile?.churchId } },
     });
     if (error) return { error: error.message };
     if (!data.user) return { error: 'Failed to create user — please try again.' };
 
-    // Mirror to profiles table
+    // Mirror to profiles table — inherit the admin's church_id
     try {
       await supabase.from('profiles').upsert(
-        { id: data.user.id, name: name.trim(), email: email.trim().toLowerCase(), role, branch_id: role === 'Branch Pastor' ? (branchId ?? null) : null, phone: phone ?? null },
+        { id: data.user.id, name: name.trim(), email: email.trim().toLowerCase(), role, church_id: profile?.churchId ?? null, branch_id: role === 'Branch Pastor' ? (branchId ?? null) : null, phone: phone ?? null },
         { onConflict: 'id' },
       );
     } catch (_) { /* profiles table may not exist */ }
@@ -295,7 +394,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, profile, loading, signIn, signUp, signOut, allProfiles, updateUserRole, updateUserProfile, createUser, deleteUser, refreshProfiles }}>
+    <AuthContext.Provider value={{ user, profile, loading, isDemo, signIn, signUp, signOut, startDemo, allProfiles, updateUserRole, updateUserProfile, createUser, deleteUser, refreshProfiles }}>
       {children}
     </AuthContext.Provider>
   );

@@ -1,6 +1,8 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
 import type { Member, Department, SmallGroup, AttendanceRecord, GivingRecord, EventRecord, Campus, PrayerRequest, PastoralVisit, VolunteerRole, Campaign, Pledge, PledgePayment, AuditLog, AuditEntity, AuditAction, VisitorRecord, OutreachActivity, OutreachProspect, Asset, Facility, MaintenanceRecord, InAppNotification } from '../types';
 import { supabase } from '../lib/supabase';
+import { demoMembers, demoDepartments, demoSmallGroups, demoCampuses, demoAttendance, demoGiving, demoEvents, demoPrayerRequests, demoPastoralVisits, demoVolunteerRoles, demoCampaigns, demoPledges, demoPledgePayments, demoVisitors } from '../demo/data';
+import { useAuth } from './AuthContext';
 
 // ---------------------------------------------------------------------------
 // Row mappers  DB (snake_case) ↔ TypeScript (camelCase)
@@ -182,6 +184,8 @@ const DataContext = createContext<DataContextType | undefined>(undefined);
 // Provider
 // ---------------------------------------------------------------------------
 export function DataProvider({ children }: { children: ReactNode }) {
+  const { isDemo, profile } = useAuth();
+  const churchId = profile?.churchId ?? null;
   const [loading, setLoading] = useState(true);
   const [members, setMembers] = useState<Member[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
@@ -197,92 +201,104 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [pledges, setPledges] = useState<Pledge[]>([]);
   const [pledgePayments, setPledgePayments] = useState<PledgePayment[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
-  const [visitors, setVisitors] = useState<VisitorRecord[]>(() => {
-    try { return JSON.parse(localStorage.getItem('chms_visitors') ?? '[]'); }
-    catch { return []; }
-  });
-  const [outreachActivities, setOutreachActivities] = useState<OutreachActivity[]>(() => {
-    try { return JSON.parse(localStorage.getItem('chms_outreach_activities') ?? '[]'); }
-    catch { return []; }
-  });
-  const [outreachProspects, setOutreachProspects] = useState<OutreachProspect[]>(() => {
-    try { return JSON.parse(localStorage.getItem('chms_outreach_prospects') ?? '[]'); }
-    catch { return []; }
-  });
-  const [notifications, setNotifications] = useState<InAppNotification[]>(() => {
-    try { return JSON.parse(localStorage.getItem('chms_notifications') ?? '[]'); }
-    catch { return []; }
-  });
-  useEffect(() => { localStorage.setItem('chms_notifications', JSON.stringify(notifications)); }, [notifications]);
+  // localStorage-backed state — initialise empty; loaded from namespaced keys once churchId is known
+  const [visitors, setVisitors] = useState<VisitorRecord[]>([]);
+  const [outreachActivities, setOutreachActivities] = useState<OutreachActivity[]>([]);
+  const [outreachProspects, setOutreachProspects] = useState<OutreachProspect[]>([]);
+  const [notifications, setNotifications] = useState<InAppNotification[]>([]);
+  const [assets, setAssets] = useState<Asset[]>([]);
+  const [facilities, setFacilities] = useState<Facility[]>([]);
+  const [maintenanceRecords, setMaintenanceRecords] = useState<MaintenanceRecord[]>([]);
+
   const addNotification = (n: InAppNotification) => setNotifications(prev => [n, ...prev].slice(0, 100));
   const clearNotifications = () => setNotifications([]);
 
-  const [assets, setAssets] = useState<Asset[]>(() => {
-    try { return JSON.parse(localStorage.getItem('chms_assets') ?? '[]'); }
-    catch { return []; }
-  });
-  const [facilities, setFacilities] = useState<Facility[]>(() => {
-    try { return JSON.parse(localStorage.getItem('chms_facilities') ?? '[]'); }
-    catch { return []; }
-  });
-  const [maintenanceRecords, setMaintenanceRecords] = useState<MaintenanceRecord[]>(() => {
-    try { return JSON.parse(localStorage.getItem('chms_maintenance') ?? '[]'); }
-    catch { return []; }
-  });
-  const [theme, setTheme] = useState<'dark' | 'light'>('dark');
+  const [theme, setTheme] = useState<'dark' | 'light'>(() => (localStorage.getItem('chms_theme') as 'dark' | 'light') ?? 'light');
 
+  // Load from church-namespaced localStorage once churchId is resolved (never in demo mode)
   useEffect(() => {
-    localStorage.setItem('chms_visitors', JSON.stringify(visitors));
-  }, [visitors]);
-  useEffect(() => {
-    localStorage.setItem('chms_outreach_activities', JSON.stringify(outreachActivities));
-  }, [outreachActivities]);
-  useEffect(() => {
-    localStorage.setItem('chms_outreach_prospects', JSON.stringify(outreachProspects));
-  }, [outreachProspects]);
-  useEffect(() => { localStorage.setItem('chms_assets', JSON.stringify(assets)); }, [assets]);
-  useEffect(() => { localStorage.setItem('chms_facilities', JSON.stringify(facilities)); }, [facilities]);
-  useEffect(() => { localStorage.setItem('chms_maintenance', JSON.stringify(maintenanceRecords)); }, [maintenanceRecords]);
+    if (!churchId || isDemo) return;
+    const load = <T,>(k: string): T[] => {
+      try { return JSON.parse(localStorage.getItem(`chms_${churchId}_${k}`) ?? 'null') ?? []; }
+      catch { return []; }
+    };
+    setVisitors(load('visitors'));
+    setOutreachActivities(load('outreach_activities'));
+    setOutreachProspects(load('outreach_prospects'));
+    setNotifications(load('notifications'));
+    setAssets(load('assets'));
+    setFacilities(load('facilities'));
+    setMaintenanceRecords(load('maintenance'));
+  }, [churchId, isDemo]);
+
+  // Persist to church-namespaced keys — never write during demo mode
+  useEffect(() => { if (!isDemo && churchId) localStorage.setItem(`chms_${churchId}_visitors`, JSON.stringify(visitors)); }, [visitors, isDemo, churchId]);
+  useEffect(() => { if (!isDemo && churchId) localStorage.setItem(`chms_${churchId}_outreach_activities`, JSON.stringify(outreachActivities)); }, [outreachActivities, isDemo, churchId]);
+  useEffect(() => { if (!isDemo && churchId) localStorage.setItem(`chms_${churchId}_outreach_prospects`, JSON.stringify(outreachProspects)); }, [outreachProspects, isDemo, churchId]);
+  useEffect(() => { if (!isDemo && churchId) localStorage.setItem(`chms_${churchId}_notifications`, JSON.stringify(notifications)); }, [notifications, isDemo, churchId]);
+  useEffect(() => { if (!isDemo && churchId) localStorage.setItem(`chms_${churchId}_assets`, JSON.stringify(assets)); }, [assets, isDemo, churchId]);
+  useEffect(() => { if (!isDemo && churchId) localStorage.setItem(`chms_${churchId}_facilities`, JSON.stringify(facilities)); }, [facilities, isDemo, churchId]);
+  useEffect(() => { if (!isDemo && churchId) localStorage.setItem(`chms_${churchId}_maintenance`, JSON.stringify(maintenanceRecords)); }, [maintenanceRecords, isDemo, churchId]);
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', theme === 'dark');
   }, [theme]);
 
-  const toggleTheme = () => setTheme(t => t === 'dark' ? 'light' : 'dark');
+  const toggleTheme = () => setTheme(t => { const next = t === 'dark' ? 'light' : 'dark'; localStorage.setItem('chms_theme', next); return next; });
 
-  // Load all data from Supabase — called on mount and on SIGNED_IN so that
-  // data reloads correctly after a logout → page refresh → login sequence
-  // (Supabase RLS returns empty arrays when there is no active session).
   useEffect(() => {
-    // Tracks whether we've already loaded data with a valid auth session.
-    // SIGNED_IN fires on tab focus (Supabase re-validates the session), so we
-    // skip the reload if we already have data to prevent UI flicker/refresh.
-    let hasAuthData = false;
+    // Demo mode: use local mock data, skip all Supabase calls
+    if (isDemo) {
+      setMembers(demoMembers);
+      setDepartments(demoDepartments);
+      setSmallGroups(demoSmallGroups);
+      setCampuses(demoCampuses);
+      setAttendance(demoAttendance);
+      setGiving(demoGiving);
+      setEvents(demoEvents);
+      setPrayerRequests(demoPrayerRequests);
+      setPastoralVisits(demoPastoralVisits);
+      setVolunteerRoles(demoVolunteerRoles);
+      setCampaigns(demoCampaigns);
+      setPledges(demoPledges);
+      setPledgePayments(demoPledgePayments);
+      setVisitors(demoVisitors);
+      setLoading(false);
+      return;
+    }
+
+    // Never query without a churchId — fetchProfile always resolves one via JWT or user.id
+    // fallback, so this only blocks the brief gap before the profile finishes loading.
+    if (!churchId) return;
+    const cId = churchId; // narrowed to string for closures
+
+    let cancelled = false;
 
     async function loadAll() {
-      const { data: { session } } = await supabase.auth.getSession();
       setLoading(true);
+      const q = (table: string) => supabase.from(table).select('*').eq('church_id', cId);
       const [
         { data: m }, { data: d }, { data: sg }, { data: c },
         { data: att }, { data: g }, { data: ev },
         { data: pr }, { data: pv }, { data: vr },
         { data: cam }, { data: pl }, { data: pp }, { data: al },
       ] = await Promise.all([
-        supabase.from('members').select('*').order('created_at', { ascending: false }),
-        supabase.from('departments').select('*'),
-        supabase.from('small_groups').select('*'),
-        supabase.from('campuses').select('*'),
-        supabase.from('attendance_records').select('*').order('date', { ascending: false }),
-        supabase.from('giving_records').select('*').order('date', { ascending: false }),
-        supabase.from('events').select('*').order('date', { ascending: false }),
-        supabase.from('prayer_requests').select('*').order('created_at', { ascending: false }),
-        supabase.from('pastoral_visits').select('*').order('date', { ascending: false }),
-        supabase.from('volunteer_roles').select('*'),
-        supabase.from('campaigns').select('*').order('start_date', { ascending: false }),
-        supabase.from('pledges').select('*').order('pledge_date', { ascending: false }),
-        supabase.from('pledge_payments').select('*').order('date', { ascending: false }),
-        supabase.from('audit_logs').select('*').order('timestamp', { ascending: false }).limit(500),
+        q('members').order('created_at', { ascending: false }),
+        q('departments'),
+        q('small_groups'),
+        q('campuses'),
+        q('attendance_records').order('date', { ascending: false }),
+        q('giving_records').order('date', { ascending: false }),
+        q('events').order('date', { ascending: false }),
+        q('prayer_requests').order('created_at', { ascending: false }),
+        q('pastoral_visits').order('date', { ascending: false }),
+        q('volunteer_roles'),
+        q('campaigns').order('start_date', { ascending: false }),
+        q('pledges').order('pledge_date', { ascending: false }),
+        q('pledge_payments').order('date', { ascending: false }),
+        q('audit_logs').order('timestamp', { ascending: false }).limit(500),
       ]);
+      if (cancelled) return;
       setMembers(m?.map(mapMember) ?? []);
       setDepartments(d?.map(mapDept) ?? []);
       setSmallGroups(sg?.map(mapGroup) ?? []);
@@ -298,21 +314,23 @@ export function DataProvider({ children }: { children: ReactNode }) {
       setPledgePayments(pp?.map(mapPayment) ?? []);
       setAuditLogs(al?.map(mapAudit) ?? []);
       setLoading(false);
-      if (session) hasAuthData = true;
     }
     loadAll();
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
-      // Only reload on genuine first-login, not on tab-focus re-validation
-      if (event === 'SIGNED_IN' && !hasAuthData) loadAll();
+      if (event === 'SIGNED_IN') loadAll();
     });
-    return () => subscription.unsubscribe();
-  }, []);
+    return () => {
+      cancelled = true;
+      subscription.unsubscribe();
+    };
+  }, [isDemo, churchId]);
 
-  // Audit helper — optimistic local + async save
+  // Audit helper — optimistic local + async save (skipped in demo mode)
   const audit = (action: AuditAction, entity: AuditEntity, entityId: string, description: string) => {
     const log: AuditLog = { id: `al${Date.now()}`, timestamp: new Date().toISOString(), entity, action, entityId, description };
     setAuditLogs(prev => [log, ...prev]);
-    supabase.from('audit_logs').insert({ id: log.id, timestamp: log.timestamp, entity: log.entity, action: log.action, entity_id: log.entityId, description: log.description })
+    if (isDemo || !churchId) return;
+    supabase.from('audit_logs').insert({ id: log.id, timestamp: log.timestamp, entity: log.entity, action: log.action, entity_id: log.entityId, description: log.description, church_id: churchId })
       .then(({ error }) => { if (error) console.error('Audit log failed:', error); });
   };
 
@@ -322,7 +340,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const addMember = (member: Member) => {
     setMembers(prev => [member, ...prev]);
     audit('CREATE', 'Member', member.id, `Added member ${member.firstName} ${member.lastName}`);
-    supabase.from('members').insert(toMemberRow(member)).then(({ error }) => { if (error) console.error(error); });
+    supabase.from('members').insert({ ...toMemberRow(member), church_id: churchId }).then(({ error }) => { if (error) console.error(error); });
   };
   const updateMember = (updated: Member) => {
     setMembers(prev => prev.map(m => m.id === updated.id ? updated : m));
@@ -338,7 +356,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const importMembers = (newMembers: Member[]) => {
     setMembers(prev => [...newMembers, ...prev]);
     audit('CREATE', 'Member', 'bulk', `Imported ${newMembers.length} members via CSV`);
-    supabase.from('members').insert(newMembers.map(toMemberRow)).then(({ error }) => { if (error) console.error(error); });
+    supabase.from('members').insert(newMembers.map(m => ({ ...toMemberRow(m), church_id: churchId }))).then(({ error }) => { if (error) console.error(error); });
   };
 
   // ---------------------------------------------------------------------------
@@ -347,7 +365,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const addAttendance = (record: AttendanceRecord) => {
     setAttendance(prev => [record, ...prev]);
     audit('CREATE', 'Attendance', record.id, `Logged ${record.serviceType} (${record.presentMemberIds.length} present)`);
-    supabase.from('attendance_records').insert(toAttendanceRow(record)).then(({ error }) => { if (error) console.error(error); });
+    supabase.from('attendance_records').insert({ ...toAttendanceRow(record), church_id: churchId }).then(({ error }) => { if (error) console.error(error); });
   };
 
   // ---------------------------------------------------------------------------
@@ -356,7 +374,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const addGiving = (record: GivingRecord) => {
     setGiving(prev => [record, ...prev]);
     audit('CREATE', 'Giving', record.id, `Recorded ₵${record.amount} ${record.type}`);
-    supabase.from('giving_records').insert(toGivingRow(record)).then(({ error }) => { if (error) console.error(error); });
+    supabase.from('giving_records').insert({ ...toGivingRow(record), church_id: churchId }).then(({ error }) => { if (error) console.error(error); });
   };
   const deleteGiving = (id: string) => {
     setGiving(prev => prev.filter(g => g.id !== id));
@@ -370,7 +388,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const addEvent = (event: EventRecord) => {
     setEvents(prev => [event, ...prev]);
     audit('CREATE', 'Event', event.id, `Created event: ${event.title}`);
-    supabase.from('events').insert(toEventRow(event)).then(({ error }) => { if (error) console.error(error); });
+    supabase.from('events').insert({ ...toEventRow(event), church_id: churchId }).then(({ error }) => { if (error) console.error(error); });
   };
   const updateEvent = (updated: EventRecord) => {
     setEvents(prev => prev.map(e => e.id === updated.id ? updated : e));
@@ -390,7 +408,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const addDepartment = (dept: Department) => {
     setDepartments(prev => [...prev, dept]);
     audit('CREATE', 'Department', dept.id, `Added department: ${dept.name}`);
-    supabase.from('departments').insert(toDeptRow(dept)).then(({ error }) => { if (error) console.error(error); });
+    supabase.from('departments').insert({ ...toDeptRow(dept), church_id: churchId }).then(({ error }) => { if (error) console.error(error); });
   };
   const updateDepartment = (updated: Department) => {
     setDepartments(prev => prev.map(d => d.id === updated.id ? updated : d));
@@ -404,7 +422,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const addSmallGroup = (group: SmallGroup) => {
     setSmallGroups(prev => [...prev, group]);
     audit('CREATE', 'SmallGroup', group.id, `Added small group: ${group.name}`);
-    supabase.from('small_groups').insert(toGroupRow(group)).then(({ error }) => { if (error) console.error(error); });
+    supabase.from('small_groups').insert({ ...toGroupRow(group), church_id: churchId }).then(({ error }) => { if (error) console.error(error); });
   };
   const updateSmallGroup = (updated: SmallGroup) => {
     setSmallGroups(prev => prev.map(g => g.id === updated.id ? updated : g));
@@ -418,7 +436,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const addCampus = (campus: Campus) => {
     setCampuses(prev => [...prev, campus]);
     audit('CREATE', 'Campus', campus.id, `Added campus: ${campus.name}`);
-    supabase.from('campuses').insert(toCampusRow(campus)).then(({ error }) => { if (error) console.error(error); });
+    supabase.from('campuses').insert({ ...toCampusRow(campus), church_id: churchId }).then(({ error }) => { if (error) console.error(error); });
   };
   const updateCampus = (updated: Campus) => {
     setCampuses(prev => prev.map(c => c.id === updated.id ? updated : c));
@@ -440,7 +458,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const addPrayerRequest = (req: PrayerRequest) => {
     setPrayerRequests(prev => [req, ...prev]);
     audit('CREATE', 'PrayerRequest', req.id, `New prayer request: ${req.title}`);
-    supabase.from('prayer_requests').insert(toPrayerRow(req)).then(({ error }) => { if (error) console.error(error); });
+    supabase.from('prayer_requests').insert({ ...toPrayerRow(req), church_id: churchId }).then(({ error }) => { if (error) console.error(error); });
   };
   const updatePrayerRequest = (updated: PrayerRequest) => {
     setPrayerRequests(prev => prev.map(r => r.id === updated.id ? updated : r));
@@ -459,7 +477,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const addPastoralVisit = (visit: PastoralVisit) => {
     setPastoralVisits(prev => [visit, ...prev]);
     audit('CREATE', 'PastoralVisit', visit.id, `Logged ${visit.visitType} by ${visit.conductedBy}`);
-    supabase.from('pastoral_visits').insert(toVisitRow(visit)).then(({ error }) => { if (error) console.error(error); });
+    supabase.from('pastoral_visits').insert({ ...toVisitRow(visit), church_id: churchId }).then(({ error }) => { if (error) console.error(error); });
   };
   const updatePastoralVisit = (updated: PastoralVisit) => {
     setPastoralVisits(prev => prev.map(v => v.id === updated.id ? updated : v));
@@ -478,7 +496,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const addVolunteerRole = (role: VolunteerRole) => {
     setVolunteerRoles(prev => [...prev, role]);
     audit('CREATE', 'VolunteerRole', role.id, `Added role: ${role.roleName}`);
-    supabase.from('volunteer_roles').insert(toRoleRow(role)).then(({ error }) => { if (error) console.error(error); });
+    supabase.from('volunteer_roles').insert({ ...toRoleRow(role), church_id: churchId }).then(({ error }) => { if (error) console.error(error); });
   };
   const updateVolunteerRole = (updated: VolunteerRole) => {
     setVolunteerRoles(prev => prev.map(r => r.id === updated.id ? updated : r));
@@ -496,7 +514,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const addCampaign = (campaign: Campaign) => {
     setCampaigns(prev => [campaign, ...prev]);
     audit('CREATE', 'Campaign', campaign.id, `Created campaign: ${campaign.title}`);
-    supabase.from('campaigns').insert(toCampaignRow(campaign)).then(({ error }) => { if (error) console.error(error); });
+    supabase.from('campaigns').insert({ ...toCampaignRow(campaign), church_id: churchId }).then(({ error }) => { if (error) console.error(error); });
   };
   const updateCampaign = (updated: Campaign) => {
     setCampaigns(prev => prev.map(c => c.id === updated.id ? updated : c));
@@ -515,7 +533,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const addPledge = (pledge: Pledge) => {
     setPledges(prev => [pledge, ...prev]);
     audit('CREATE', 'Pledge', pledge.id, `New pledge: ₵${pledge.pledgeAmount}`);
-    supabase.from('pledges').insert(toPledgeRow(pledge)).then(({ error }) => { if (error) console.error(error); });
+    supabase.from('pledges').insert({ ...toPledgeRow(pledge), church_id: churchId }).then(({ error }) => { if (error) console.error(error); });
   };
   const updatePledge = (updated: Pledge) => {
     setPledges(prev => prev.map(p => p.id === updated.id ? updated : p));
@@ -530,7 +548,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     setPledgePayments(prev => [payment, ...prev]);
     setPledges(prev => prev.map(p => p.id === payment.pledgeId ? { ...p, paidAmount: Math.min(p.paidAmount + payment.amount, p.pledgeAmount) } : p));
     audit('UPDATE', 'Pledge', payment.pledgeId, `Payment recorded: ₵${payment.amount}`);
-    supabase.from('pledge_payments').insert(toPaymentRow(payment)).then(({ error }) => { if (error) console.error(error); });
+    supabase.from('pledge_payments').insert({ ...toPaymentRow(payment), church_id: churchId }).then(({ error }) => { if (error) console.error(error); });
     const pledge = pledges.find(p => p.id === payment.pledgeId);
     if (pledge) {
       const newPaid = Math.min(pledge.paidAmount + payment.amount, pledge.pledgeAmount);

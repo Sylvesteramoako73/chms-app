@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { format, subDays } from 'date-fns';
 import { useData } from '@/context/DataContext';
+import { useAuth } from '@/context/AuthContext';
 import type { ReminderTemplate, ReminderLog, ReminderType, ReminderChannel } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -16,7 +17,7 @@ import {
   Mail, MessageCircle, Smartphone, Gift, Calendar, Users, Zap, ToggleLeft, ToggleRight,
 } from 'lucide-react';
 import { cn } from '@/utils';
-import { API_BASE } from '@/lib/api';
+import { openWhatsAppTo, sendWhatsAppViaServer } from '@/lib/whatsapp';
 
 // ── localStorage keys ──────────────────────────────────────────────────────────
 const TEMPLATES_KEY = 'chms_reminder_templates';
@@ -67,6 +68,7 @@ const PLACEHOLDERS: Record<ReminderType, string[]> = {
 
 export default function Automation() {
   const { members, events } = useData();
+  const { profile } = useAuth();
   const { toast } = useToast();
 
   const [templates, setTemplates] = useState<ReminderTemplate[]>(() => {
@@ -133,13 +135,6 @@ export default function Automation() {
   const handleSendNow = async (template: ReminderTemplate) => {
     setSending(template.id);
     try {
-      const res = await fetch(`${API_BASE}/api/whatsapp/status`);
-      const { status } = await res.json() as { status: string };
-      if (status !== 'connected') {
-        toast({ title: 'WhatsApp not connected', description: 'Connect WhatsApp in the Communication page first.', variant: 'destructive' });
-        return;
-      }
-
       const today = new Date();
       const targets = template.type === 'Birthday'
         ? members.filter(m => m.dateOfBirth && m.phone && new Date(m.dateOfBirth).getMonth() === today.getMonth() && new Date(m.dateOfBirth).getDate() === today.getDate())
@@ -153,21 +148,31 @@ export default function Automation() {
       }
 
       const newLogs: ReminderLog[] = [];
-      await Promise.allSettled(targets.map(async m => {
+      let serverSent = 0;
+      for (const m of targets) {
         const years = template.type === 'Anniversary' ? String(today.getFullYear() - new Date(m.joinDate).getFullYear()) : '';
         const msg = template.body
           .replace('{name}', `${m.firstName} ${m.lastName}`)
           .replace('{firstName}', m.firstName)
           .replace('{years}', years)
           .replace('{churchName}', "Winners' Chapel");
-        await fetch(`${API_BASE}/api/whatsapp/send`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ number: m.phone, message: msg }) });
+        let sent = false;
+        if (profile?.id) {
+          sent = await sendWhatsAppViaServer(profile.id, m.phone!, msg);
+        }
+        if (!sent) openWhatsAppTo(m.phone!, msg);
+        else serverSent++;
         newLogs.push({ id: `log_${Date.now()}_${m.id}`, templateId: template.id, templateName: template.name, recipientName: `${m.firstName} ${m.lastName}`, recipientContact: m.phone, channel: 'WhatsApp', type: template.type, message: msg, sentAt: new Date().toISOString(), status: 'Sent' });
-      }));
+      }
 
       saveLogs([...newLogs, ...logs]);
-      toast({ title: `Sent to ${targets.length} recipient${targets.length !== 1 ? 's' : ''}` });
+      if (serverSent > 0) {
+        toast({ title: `WhatsApp sent to ${serverSent} recipient${serverSent !== 1 ? 's' : ''}`, description: 'Messages delivered automatically.' });
+      } else {
+        toast({ title: `WhatsApp opened for ${targets.length} recipient${targets.length !== 1 ? 's' : ''}`, description: 'Tap Send in each WhatsApp chat.' });
+      }
     } catch {
-      toast({ title: 'Send failed', description: 'Could not reach WhatsApp server.', variant: 'destructive' });
+      toast({ title: 'Send failed', description: 'Could not open WhatsApp. Please try again.', variant: 'destructive' });
     } finally {
       setSending(null);
     }

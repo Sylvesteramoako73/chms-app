@@ -2,25 +2,29 @@ import { useState, useMemo, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { useData } from '@/context/DataContext';
 import { useRole } from '@/context/RoleContext';
+import { useAuth } from '@/context/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Legend, PieChart, Pie, Cell,
 } from 'recharts';
-import { Download, TrendingUp, Users, Coins, CalendarCheck, Loader2, Share2, BookOpen } from 'lucide-react';
-import { format, subMonths, startOfMonth, endOfMonth, eachMonthOfInterval } from 'date-fns';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Download, TrendingUp, Users, Coins, CalendarCheck, Loader2, Share2 } from 'lucide-react';
+import { format, subMonths, startOfMonth, endOfMonth, eachMonthOfInterval, getDaysInMonth } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 
 const GHS = '₵';
 const CHART_COLORS = ['#0B1120', '#C9A84C', '#4A7C6F', '#7090bc', '#D4B96A', '#9b59b6', '#e67e22'];
 
 export default function Reports() {
-  const { members, attendance, giving, campaigns, pledges, departments } = useData();
-  const { actions } = useRole();
+  const { members: allMembers, attendance: allAttendance, giving: allGiving, campaigns, pledges, departments, campuses } = useData();
+  const { actions, role } = useRole();
+  const { profile } = useAuth();
   const { toast } = useToast();
 
   const [startDate, setStartDate] = useState(format(subMonths(new Date(), 5), 'yyyy-MM-dd'));
@@ -28,6 +32,23 @@ export default function Reports() {
   const [exporting, setExporting] = useState(false);
   const currentYear = new Date().getFullYear();
   const [annualYear, setAnnualYear] = useState(currentYear);
+  const [selectedBranch, setSelectedBranch] = useState<string>('all');
+
+  // Export dialog
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exportType, setExportType] = useState<'annual' | 'monthly' | 'period'>('annual');
+  const [dlYear, setDlYear] = useState(currentYear);
+  const [dlMonth, setDlMonth] = useState(new Date().getMonth() + 1);
+  const [dlStart, setDlStart] = useState(format(subMonths(new Date(), 1), 'yyyy-MM-dd'));
+  const [dlEnd, setDlEnd] = useState(format(new Date(), 'yyyy-MM-dd'));
+
+  // Branch Pastor is locked to their own branch; Admin can pick any or all
+  const activeBranchId = role === 'Branch Pastor' ? (profile?.branchId ?? null) : (selectedBranch === 'all' ? null : selectedBranch);
+  const activeBranchName = activeBranchId ? (campuses.find(c => c.id === activeBranchId)?.name ?? 'Branch') : 'All Branches';
+
+  const members    = activeBranchId ? allMembers.filter(m => m.campusId === activeBranchId)    : allMembers;
+  const giving     = activeBranchId ? allGiving.filter(g => g.campusId === activeBranchId)     : allGiving;
+  const attendance = activeBranchId ? allAttendance.filter(a => a.campusId === activeBranchId) : allAttendance;
 
   const membershipChartRef   = useRef<HTMLDivElement>(null);
   const financialChartRef    = useRef<HTMLDivElement>(null);
@@ -118,171 +139,177 @@ export default function Reports() {
 
   const tooltipStyle = { borderRadius: '8px', border: 'none', boxShadow: '0 4px 20px rgba(0,0,0,0.15)', background: 'hsl(var(--card))' };
 
-  const captureElement = async (el: HTMLElement): Promise<string> => {
-    const html2canvas = (await import('html2canvas')).default;
-    const canvas = await html2canvas(el, { scale: 2, useCORS: true, backgroundColor: '#ffffff', logging: false });
-    return canvas.toDataURL('image/png');
-  };
+  const loadLogoDataUrl = (): Promise<string> =>
+    fetch('/logo.png').then(r => r.blob()).then(b => new Promise<string>(res => {
+      const reader = new FileReader();
+      reader.onload = () => res(reader.result as string);
+      reader.readAsDataURL(b);
+    }));
 
-  const handleExportPDF = async () => {
+  const generatePeriodPDF = async (start: Date, end: Date, periodLabel: string) => {
     if (!actions.canExportReports) {
       toast({ title: 'Access denied', description: 'Your role cannot export reports.', variant: 'destructive' }); return;
     }
     setExporting(true);
     try {
-      // jsPDF built-in fonts only support Latin-1; use ISO code instead of ₵
-      const GHS = 'GHS'; // eslint-disable-line @typescript-eslint/no-shadow
+      const logoDataUrl = await loadLogoDataUrl();
+      const GHS = 'GHS';
       const { jsPDF } = await import('jspdf');
       const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-      const pageW = doc.internal.pageSize.getWidth();
-      const pageH = doc.internal.pageSize.getHeight();
-      const margin = 14;
-      const contentW = pageW - margin * 2;
-      let y = margin;
+      const W = doc.internal.pageSize.getWidth();
+      const H = doc.internal.pageSize.getHeight();
+      const M = 14;
+      const CW = W - M * 2;
+
+      const pGiving     = giving.filter(g => { const d = new Date(g.date); return d >= start && d <= end; });
+      const pAttendance = attendance.filter(a => { const d = new Date(a.date); return d >= start && d <= end; });
+      const pNewMembers = members.filter(m => { const d = new Date(m.joinDate); return d >= start && d <= end; });
+      const pTotal      = pGiving.reduce((s, g) => s + g.amount, 0);
+      const pAvgAtt     = pAttendance.length > 0
+        ? Math.round(pAttendance.reduce((s, a) => s + a.presentMemberIds.length + a.visitorsCount, 0) / pAttendance.length) : 0;
+
+      let y = M;
 
       const paintHeader = () => {
-        doc.setFillColor(11, 17, 32);
-        doc.rect(0, 0, pageW, 28, 'F');
-        doc.setTextColor(201, 168, 76);
-        doc.setFontSize(20); doc.setFont('helvetica', 'bold');
-        doc.text('ChurchCare', margin, 12);
-        doc.setFontSize(10); doc.setFont('helvetica', 'normal');
-        doc.setTextColor(180, 190, 210);
-        doc.text('Reports & Analytics', margin, 19);
+        doc.setFillColor(11, 17, 32); doc.rect(0, 0, W, 28, 'F');
+        doc.setFillColor(255, 255, 255); doc.roundedRect(M - 2, 3, 22, 22, 1, 1, 'F');
+        doc.addImage(logoDataUrl, 'PNG', M - 1, 4, 20, 20);
+        doc.setTextColor(201, 168, 76); doc.setFontSize(13); doc.setFont('helvetica', 'bold');
+        doc.text('Faith ChurchCare', M + 24, 12);
+        doc.setFontSize(8); doc.setFont('helvetica', 'normal');
+        doc.setTextColor(180, 190, 210); doc.text('Reports & Analytics', M + 24, 19);
         doc.setTextColor(120, 130, 150);
-        doc.text(`Generated: ${format(new Date(), 'MMMM d, yyyy')}`, pageW - margin, 19, { align: 'right' });
-        doc.text(`Period: ${format(rangeStart, 'MMM d, yyyy')} – ${format(rangeEnd, 'MMM d, yyyy')}`, pageW - margin, 12, { align: 'right' });
+        doc.text(`Generated: ${format(new Date(), 'MMMM d, yyyy')}`, W - M, 19, { align: 'right' });
+        doc.text(`${periodLabel} · ${activeBranchName}`, W - M, 12, { align: 'right' });
       };
 
-      const newPage = () => { doc.addPage(); paintHeader(); y = 35; };
-      const checkSpace = (needed: number) => { if (y + needed > pageH - margin) newPage(); };
+      const newPage = () => { doc.addPage(); paintHeader(); y = 36; };
+      const checkSpace = (n: number) => { if (y + n > H - M) newPage(); };
 
       paintHeader(); y = 38;
 
-      // Summary stat boxes
+      // Summary boxes
       const stats = [
-        { label: 'New Members', value: String(newMembersInRange.length) },
-        { label: 'Total Giving',  value: `${GHS}${totalGiving.toLocaleString()}` },
-        { label: 'Services Held', value: String(rangeAttendance.length) },
-        { label: 'Avg Attendance',value: String(avgAttendance) },
+        { label: 'New Members',   value: String(pNewMembers.length) },
+        { label: 'Total Giving',  value: `${GHS}${pTotal.toLocaleString()}` },
+        { label: 'Services Held', value: String(pAttendance.length) },
+        { label: 'Avg Attendance',value: String(pAvgAtt) },
       ];
-      const boxW = (contentW - 6) / 4;
+      const bW = (CW - 6) / 4;
       stats.forEach((s, i) => {
-        const x = margin + i * (boxW + 2);
-        doc.setFillColor(245, 245, 240); doc.roundedRect(x, y, boxW, 18, 3, 3, 'F');
+        const x = M + i * (bW + 2);
+        doc.setFillColor(245, 245, 240); doc.roundedRect(x, y, bW, 18, 3, 3, 'F');
         doc.setFontSize(14); doc.setFont('helvetica', 'bold'); doc.setTextColor(11, 17, 32);
-        doc.text(s.value, x + boxW / 2, y + 10, { align: 'center' });
+        doc.text(s.value, x + bW / 2, y + 10, { align: 'center' });
         doc.setFontSize(8); doc.setFont('helvetica', 'normal'); doc.setTextColor(100, 110, 130);
-        doc.text(s.label, x + boxW / 2, y + 16, { align: 'center' });
+        doc.text(s.label, x + bW / 2, y + 16, { align: 'center' });
       });
       y += 26;
 
-      const sectionHeader = (title: string, desc: string) => {
-        checkSpace(18);
-        doc.setFillColor(230, 234, 240); doc.rect(margin, y, contentW, 0.4, 'F'); y += 5;
-        doc.setFontSize(11); doc.setFont('helvetica', 'bold'); doc.setTextColor(11, 17, 32);
-        doc.text(title, margin, y);
-        doc.setFontSize(8); doc.setFont('helvetica', 'normal'); doc.setTextColor(120, 130, 150);
-        doc.text(desc, margin, y + 5); y += 12;
+      const sectionHead = (title: string) => {
+        checkSpace(14);
+        doc.setFillColor(201, 168, 76); doc.rect(M, y, 3, 10, 'F');
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(12); doc.setTextColor(11, 17, 32);
+        doc.text(title, M + 6, y + 7); y += 14;
       };
 
-      const addChart = async (ref: React.RefObject<HTMLDivElement | null>, title: string, desc: string, imgH = 52) => {
-        if (!ref.current) return;
-        const imgData = await captureElement(ref.current);
-        checkSpace(imgH + 20); sectionHeader(title, desc);
-        doc.addImage(imgData, 'PNG', margin, y, contentW, imgH); y += imgH + 8;
-      };
-
-      // ── Finance ──────────────────────────────────────────────────────────
-      await addChart(financialChartRef,  'Monthly Giving Breakdown', 'Tithes, Offerings and other contributions per month');
-      await addChart(givingTypeChartRef, 'Giving by Type', `Distribution of ${GHS}${totalGiving.toLocaleString()} total giving`);
-
-      // Financial table
-      sectionHeader('Monthly Financial Detail', 'Month-by-month giving breakdown');
-      const colW = [30, 38, 38, 38, 38];
-      const hdrs = ['Month', 'Tithes', 'Offerings', 'Other', 'Total'];
-      doc.setFillColor(11, 17, 32); doc.rect(margin, y, contentW, 7, 'F');
-      doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
-      let cx = margin + 2;
-      hdrs.forEach((h, i) => { doc.text(h, cx, y + 5); cx += colW[i]; });
+      // Finance
+      sectionHead('Financial Overview');
+      const givingTypes: Record<string, number> = {};
+      pGiving.forEach(g => { givingTypes[g.type] = (givingTypes[g.type] ?? 0) + g.amount; });
+      const mColX = [M + 3, M + 50, M + 95, M + 130, M + 160];
+      doc.setFillColor(11, 17, 32); doc.rect(M, y, CW, 7, 'F');
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(255, 255, 255);
+      ['Type', 'Amount', '', '', '%'].forEach((h, i) => doc.text(h, mColX[i], y + 5));
       y += 7;
-      financialData.forEach((row, ri) => {
-        checkSpace(6);
-        doc.setFillColor(ri % 2 === 0 ? 250 : 245, 250, 248); doc.rect(margin, y, contentW, 6, 'F');
-        doc.setFont('helvetica', 'normal'); doc.setTextColor(50, 60, 80);
-        cx = margin + 2;
-        const tot = row.Tithes + row.Offerings + row.Other;
-        [row.name, `${GHS}${row.Tithes.toLocaleString()}`, `${GHS}${row.Offerings.toLocaleString()}`, `${GHS}${row.Other.toLocaleString()}`, `${GHS}${tot.toLocaleString()}`]
-          .forEach((v, i) => { doc.text(v, cx, y + 4); cx += colW[i]; });
-        y += 6;
-      });
-      // Totals footer row
-      checkSpace(7);
-      doc.setFillColor(220, 225, 235); doc.rect(margin, y, contentW, 7, 'F');
-      doc.setFont('helvetica', 'bold'); doc.setTextColor(11, 17, 32); cx = margin + 2;
-      const totTithes = financialData.reduce((s, r) => s + r.Tithes, 0);
-      const totOff    = financialData.reduce((s, r) => s + r.Offerings, 0);
-      const totOther  = financialData.reduce((s, r) => s + r.Other, 0);
-      ['TOTAL', `${GHS}${totTithes.toLocaleString()}`, `${GHS}${totOff.toLocaleString()}`, `${GHS}${totOther.toLocaleString()}`, `${GHS}${totalGiving.toLocaleString()}`]
-        .forEach((v, i) => { doc.text(v, cx, y + 5); cx += colW[i]; });
-      y += 12;
-
-      // Campaigns
-      if (campaignSummary.length > 0) {
-        sectionHeader('Campaigns & Pledges', 'Fundraising campaign progress');
-        campaignSummary.forEach((c, ri) => {
-          checkSpace(8);
-          doc.setFillColor(ri % 2 === 0 ? 250 : 245, 250, 248); doc.rect(margin, y, contentW, 8, 'F');
-          doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(11, 17, 32);
-          doc.text(c.title.slice(0, 38), margin + 2, y + 5);
-          doc.setFont('helvetica', 'normal'); doc.setTextColor(80, 90, 110);
-          doc.text(`Goal: ${GHS}${c.goalAmount.toLocaleString()}`, margin + 90, y + 5);
-          doc.text(`Raised: ${GHS}${c.raised.toLocaleString()}`, margin + 125, y + 5);
-          doc.text(`${c.pct}%`, margin + 158, y + 5);
-          y += 8;
-        });
-        y += 4;
-      }
-
-      // ── Attendance ────────────────────────────────────────────────────────
-      await addChart(attendanceChartRef,     'Monthly Attendance', 'Average attendance and services held per month');
-      await addChart(attendanceTypeChartRef, 'Attendance by Service Type', 'Average headcount per service type');
-
-      // Attendance by type table
-      if (attendanceByType.length > 0) {
-        sectionHeader('Service Type Summary', 'Sessions and average attendance per type');
-        doc.setFillColor(11, 17, 32); doc.rect(margin, y, contentW, 7, 'F');
-        doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
-        doc.text('Service Type', margin + 2, y + 5); doc.text('Sessions', margin + 110, y + 5); doc.text('Avg Attendance', margin + 140, y + 5);
+      Object.entries(givingTypes).forEach(([type, amount], ri) => {
+        checkSpace(7);
+        doc.setFillColor(ri % 2 === 0 ? 250 : 245, 250, 248); doc.rect(M, y, CW, 7, 'F');
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(50, 60, 80);
+        doc.text(type, M + 3, y + 5);
+        doc.setFont('helvetica', 'bold'); doc.setTextColor(11, 17, 32);
+        doc.text(`${GHS}${amount.toLocaleString()}`, W - M - 3, y + 5, { align: 'right' });
+        const pct = pTotal > 0 ? Math.round((amount / pTotal) * 100) : 0;
+        doc.setFont('helvetica', 'normal'); doc.setTextColor(120, 130, 150);
+        doc.text(`${pct}%`, W - M - 22, y + 5, { align: 'right' });
         y += 7;
-        attendanceByType.forEach((row, ri) => {
-          checkSpace(6);
-          doc.setFillColor(ri % 2 === 0 ? 250 : 245, 250, 248); doc.rect(margin, y, contentW, 6, 'F');
-          doc.setFont('helvetica', 'normal'); doc.setTextColor(50, 60, 80);
-          doc.text(row.name, margin + 2, y + 4);
-          doc.text(String(row.Sessions), margin + 110, y + 4);
-          doc.text(String(row.Avg), margin + 140, y + 4);
-          y += 6;
-        });
-        y += 6;
-      }
-
-      // ── Members ───────────────────────────────────────────────────────────
-      await addChart(membershipChartRef, 'Membership Growth', 'Cumulative member count over the selected period');
-      await addChart(deptChartRef, 'Department Distribution', 'Member count per department');
-
-      // Status table
-      sectionHeader('Membership by Status', `Total: ${members.length} members`);
-      statusData.forEach((s, ri) => {
-        checkSpace(6);
-        const pct = members.length > 0 ? Math.round((s.value / members.length) * 100) : 0;
-        doc.setFillColor(ri % 2 === 0 ? 250 : 245, 250, 248); doc.rect(margin, y, contentW, 6, 'F');
-        doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(50, 60, 80);
-        doc.text(s.name, margin + 2, y + 4);
-        doc.text(String(s.value), margin + 80, y + 4);
-        doc.text(`${pct}%`, margin + 110, y + 4);
-        y += 6;
       });
+      checkSpace(8);
+      doc.setFillColor(220, 225, 235); doc.rect(M, y, CW, 8, 'F');
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(11, 17, 32);
+      doc.text('TOTAL', M + 3, y + 5.5);
+      doc.text(`${GHS}${pTotal.toLocaleString()}`, W - M - 3, y + 5.5, { align: 'right' });
+      y += 14;
+
+      // Attendance
+      sectionHead('Attendance Summary');
+      const attByType: Record<string, { total: number; count: number }> = {};
+      pAttendance.forEach(a => {
+        if (!attByType[a.serviceType]) attByType[a.serviceType] = { total: 0, count: 0 };
+        attByType[a.serviceType].total += a.presentMemberIds.length + a.visitorsCount;
+        attByType[a.serviceType].count++;
+      });
+      doc.setFillColor(11, 17, 32); doc.rect(M, y, CW, 7, 'F');
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(255, 255, 255);
+      doc.text('Service Type', M + 3, y + 5); doc.text('Sessions', M + 110, y + 5); doc.text('Avg Attendance', M + 145, y + 5);
+      y += 7;
+      Object.entries(attByType).forEach(([type, v], ri) => {
+        checkSpace(7);
+        doc.setFillColor(ri % 2 === 0 ? 250 : 245, 250, 248); doc.rect(M, y, CW, 7, 'F');
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(50, 60, 80);
+        doc.text(type, M + 3, y + 5); doc.text(String(v.count), M + 110, y + 5);
+        doc.setFont('helvetica', 'bold'); doc.setTextColor(11, 17, 32);
+        doc.text(String(Math.round(v.total / v.count)), M + 145, y + 5);
+        y += 7;
+      });
+      if (Object.keys(attByType).length === 0) {
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(120, 130, 150);
+        doc.text('No attendance records for this period.', M + 3, y + 5); y += 10;
+      }
+      y += 6;
+
+      // Membership
+      sectionHead('Membership');
+      const statusCounts: Record<string, number> = {};
+      members.forEach(m => { statusCounts[m.status] = (statusCounts[m.status] ?? 0) + 1; });
+      doc.setFillColor(11, 17, 32); doc.rect(M, y, CW, 7, 'F');
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(255, 255, 255);
+      doc.text('Status', M + 3, y + 5); doc.text('Count', M + 110, y + 5); doc.text('Share', M + 150, y + 5);
+      y += 7;
+      Object.entries(statusCounts).forEach(([status, count], ri) => {
+        checkSpace(7);
+        doc.setFillColor(ri % 2 === 0 ? 250 : 245, 250, 248); doc.rect(M, y, CW, 7, 'F');
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(50, 60, 80);
+        doc.text(status, M + 3, y + 5); doc.text(String(count), M + 110, y + 5);
+        const pct = members.length > 0 ? Math.round((count / members.length) * 100) : 0;
+        doc.text(`${pct}%`, M + 150, y + 5); y += 7;
+      });
+      checkSpace(8);
+      doc.setFillColor(220, 225, 235); doc.rect(M, y, CW, 8, 'F');
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(11, 17, 32);
+      doc.text('TOTAL MEMBERS', M + 3, y + 5.5); doc.text(String(members.length), M + 110, y + 5.5);
+      doc.text('100%', M + 150, y + 5.5); y += 14;
+
+      // New members this period
+      if (pNewMembers.length > 0) {
+        sectionHead(`New Members This Period (${pNewMembers.length})`);
+        doc.setFillColor(11, 17, 32); doc.rect(M, y, CW, 7, 'F');
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(255, 255, 255);
+        doc.text('Name', M + 3, y + 5); doc.text('Join Date', M + 110, y + 5); doc.text('Status', M + 150, y + 5);
+        y += 7;
+        pNewMembers.slice(0, 20).forEach((m, ri) => {
+          checkSpace(7);
+          doc.setFillColor(ri % 2 === 0 ? 250 : 245, 250, 248); doc.rect(M, y, CW, 7, 'F');
+          doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(50, 60, 80);
+          doc.text(`${m.firstName} ${m.lastName}`.slice(0, 35), M + 3, y + 5);
+          doc.text(format(new Date(m.joinDate), 'MMM d, yyyy'), M + 110, y + 5);
+          doc.text(m.status, M + 150, y + 5); y += 7;
+        });
+        if (pNewMembers.length > 20) {
+          doc.setFont('helvetica', 'italic'); doc.setTextColor(120, 130, 150);
+          doc.text(`…and ${pNewMembers.length - 20} more`, M + 3, y + 4); y += 8;
+        }
+      }
 
       // Page footers
       const totalPages = (doc as unknown as { internal: { pages: unknown[] } }).internal.pages.length - 1;
@@ -290,18 +317,31 @@ export default function Reports() {
         doc.setPage(p);
         const ph = doc.internal.pageSize.getHeight();
         doc.setFontSize(7); doc.setTextColor(160, 170, 185);
-        doc.text('ChurchCare — Confidential', margin, ph - 6);
-        doc.text(`Page ${p} of ${totalPages}`, pageW - margin, ph - 6, { align: 'right' });
+        doc.text('Faith ChurchCare — Confidential', M, ph - 6);
+        doc.text(`Page ${p} of ${totalPages}`, W - M, ph - 6, { align: 'right' });
       }
 
-      const filename = `ChurchCare_Report_${format(new Date(), 'yyyy-MM-dd')}.pdf`;
+      const filename = `FaithChurchCare_${periodLabel.replace(/[^a-zA-Z0-9]/g, '_')}_${activeBranchName.replace(/\s/g, '_')}.pdf`;
       doc.save(filename);
-      toast({ title: 'PDF exported', description: `${filename} downloaded.` });
+      toast({ title: 'Report downloaded', description: filename });
     } catch (err) {
       console.error(err);
-      toast({ title: 'Export failed', description: 'Could not generate PDF. Please try again.', variant: 'destructive' });
+      toast({ title: 'Export failed', description: 'Could not generate PDF.', variant: 'destructive' });
     } finally {
       setExporting(false);
+    }
+  };
+
+  const handleDownload = () => {
+    setExportOpen(false);
+    if (exportType === 'annual') {
+      handleAnnualReportPDF(dlYear);
+    } else if (exportType === 'monthly') {
+      const start = new Date(dlYear, dlMonth - 1, 1);
+      const end = new Date(dlYear, dlMonth - 1, getDaysInMonth(start));
+      generatePeriodPDF(start, end, format(start, 'MMMM yyyy'));
+    } else {
+      generatePeriodPDF(new Date(dlStart), new Date(dlEnd), `${format(new Date(dlStart), 'MMM d')} – ${format(new Date(dlEnd), 'MMM d, yyyy')}`);
     }
   };
 
@@ -318,12 +358,13 @@ export default function Reports() {
     }
   };
 
-  const handleAnnualReportPDF = async () => {
+  const handleAnnualReportPDF = async (year: number) => {
     if (!actions.canExportReports) {
       toast({ title: 'Access denied', description: 'Your role cannot export reports.', variant: 'destructive' }); return;
     }
     setExporting(true);
     try {
+      const logoDataUrl = await loadLogoDataUrl();
       // jsPDF built-in fonts only support Latin-1; use ISO code instead of ₵
       const GHS = 'GHS'; // eslint-disable-line @typescript-eslint/no-shadow
       const { jsPDF } = await import('jspdf');
@@ -333,8 +374,8 @@ export default function Reports() {
       const M = 14;
       const CW = W - M * 2;
 
-      const yearStart = new Date(annualYear, 0, 1);
-      const yearEnd = new Date(annualYear, 11, 31);
+      const yearStart = new Date(year, 0, 1);
+      const yearEnd = new Date(year, 11, 31);
       const yearGiving = giving.filter(g => { const d = new Date(g.date); return d >= yearStart && d <= yearEnd; });
       const yearAttendance = attendance.filter(a => { const d = new Date(a.date); return d >= yearStart && d <= yearEnd; });
       const yearNewMembers = members.filter(m => { const d = new Date(m.joinDate); return d >= yearStart && d <= yearEnd; });
@@ -350,14 +391,13 @@ export default function Reports() {
       doc.rect(0, 0, W, 2, 'F');
       doc.rect(0, H - 2, W, 2, 'F');
 
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(28);
-      doc.setTextColor(201, 168, 76);
-      doc.text('ChurchCare', W / 2, H / 2 - 32, { align: 'center' });
+      doc.setFillColor(255, 255, 255);
+      doc.roundedRect(W / 2 - 25, H / 2 - 68, 50, 50, 3, 3, 'F');
+      doc.addImage(logoDataUrl, 'PNG', W / 2 - 24, H / 2 - 67, 48, 48);
 
       doc.setFontSize(72);
       doc.setTextColor(255, 255, 255);
-      doc.text(String(annualYear), W / 2, H / 2 + 18, { align: 'center' });
+      doc.text(String(year), W / 2, H / 2 + 18, { align: 'center' });
 
       doc.setFontSize(16);
       doc.setFont('helvetica', 'normal');
@@ -380,15 +420,18 @@ export default function Reports() {
       const paintHeader = () => {
         doc.setFillColor(11, 17, 32);
         doc.rect(0, 0, W, 24, 'F');
+        doc.setFillColor(255, 255, 255);
+        doc.roundedRect(M - 2, 2, 20, 20, 1, 1, 'F');
+        doc.addImage(logoDataUrl, 'PNG', M - 1, 3, 18, 18);
         doc.setFont('helvetica', 'bold');
-        doc.setFontSize(13);
+        doc.setFontSize(11);
         doc.setTextColor(201, 168, 76);
-        doc.text('ChurchCare', M, 13);
+        doc.text('Faith ChurchCare', M + 22, 12);
         doc.setFontSize(8);
         doc.setFont('helvetica', 'normal');
         doc.setTextColor(160, 170, 190);
-        doc.text(`${annualYear} Annual Report`, M, 20);
-        doc.text(`Generated: ${format(new Date(), 'MMM d, yyyy')}`, W - M, 20, { align: 'right' });
+        doc.text(`${year} Annual Report · ${activeBranchName}`, M + 22, 19);
+        doc.text(`Generated: ${format(new Date(), 'MMM d, yyyy')}`, W - M, 19, { align: 'right' });
       };
 
       const newPage = () => { doc.addPage(); paintHeader(); y = 32; };
@@ -405,7 +448,7 @@ export default function Reports() {
       doc.setFontSize(8);
       doc.setFont('helvetica', 'normal');
       doc.setTextColor(120, 130, 150);
-      doc.text(`January 1 – December 31, ${annualYear}`, M, y + 6);
+      doc.text(`January 1 – December 31, ${year}`, M, y + 6);
       doc.setDrawColor(201, 168, 76);
       doc.setLineWidth(0.4);
       doc.line(M, y + 9, W - M, y + 9);
@@ -620,8 +663,8 @@ export default function Reports() {
         doc.text(`Page ${p - 1} of ${totalPages - 1}`, W - M, ph - 6, { align: 'right' });
       }
 
-      doc.save(`ChurchCare_Annual_Report_${annualYear}.pdf`);
-      toast({ title: 'Annual Report generated', description: `ChurchCare_Annual_Report_${annualYear}.pdf downloaded.` });
+      doc.save(`FaithChurchCare_Annual_Report_${year}_${activeBranchName.replace(/\s/g, '_')}.pdf`);
+      toast({ title: 'Annual Report generated', description: `Annual Report ${year} downloaded.` });
     } catch (err) {
       console.error(err);
       toast({ title: 'Export failed', description: 'Could not generate report. Please try again.', variant: 'destructive' });
@@ -641,17 +684,98 @@ export default function Reports() {
           <Button variant="outline" size="sm" onClick={handleShare} className="gap-2" disabled={exporting}>
             <Share2 className="w-4 h-4" /> Share
           </Button>
-          <Button size="sm" onClick={handleExportPDF} disabled={exporting || !actions.canExportReports} className="gap-2 bg-white hover:bg-gray-50 text-navy-900 font-medium">
-            {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-            {exporting ? 'Generating…' : 'Export PDF'}
-          </Button>
-          <Button size="sm" onClick={handleAnnualReportPDF} disabled={exporting || !actions.canExportReports}
+          <Button size="sm" onClick={() => setExportOpen(true)} disabled={exporting || !actions.canExportReports}
             className="gap-2 bg-navy-900 hover:bg-navy-800 text-gold-400 font-medium dark:bg-navy-700">
-            {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <BookOpen className="w-4 h-4" />}
-            Annual Report
+            {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+            {exporting ? 'Generating…' : 'Export Report'}
           </Button>
         </div>
       </div>
+
+      {/* Export dialog */}
+      <Dialog open={exportOpen} onOpenChange={setExportOpen}>
+        <DialogContent className="sm:max-w-[420px]">
+          <DialogHeader>
+            <DialogTitle>Export Report</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-5 py-2">
+            <div className="space-y-2">
+              {(['annual', 'monthly', 'period'] as const).map(opt => (
+                <label key={opt} className="flex items-center gap-3 rounded-lg border border-border/50 px-4 py-3 cursor-pointer hover:bg-muted/30 transition-colors" onClick={() => setExportType(opt)}>
+                  <input type="radio" name="export-type" value={opt} checked={exportType === opt} onChange={() => setExportType(opt)} className="accent-navy-900 w-4 h-4" />
+                  <span className="font-medium text-sm">{opt === 'annual' ? 'Annual Report' : opt === 'monthly' ? 'Monthly Report' : 'Specific Period'}</span>
+                </label>
+              ))}
+            </div>
+
+            {exportType === 'annual' && (
+              <div className="space-y-1.5">
+                <Label className="text-xs">Year</Label>
+                <Select value={String(dlYear)} onValueChange={v => setDlYear(Number(v))}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {[currentYear - 2, currentYear - 1, currentYear].map(yr => (
+                      <SelectItem key={yr} value={String(yr)}>{yr}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {exportType === 'monthly' && (
+              <div className="flex gap-3">
+                <div className="space-y-1.5 flex-1">
+                  <Label className="text-xs">Month</Label>
+                  <Select value={String(dlMonth)} onValueChange={v => setDlMonth(Number(v))}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
+                        <SelectItem key={m} value={String(m)}>{format(new Date(2024, m - 1, 1), 'MMMM')}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5 w-28">
+                  <Label className="text-xs">Year</Label>
+                  <Select value={String(dlYear)} onValueChange={v => setDlYear(Number(v))}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {[currentYear - 2, currentYear - 1, currentYear].map(yr => (
+                        <SelectItem key={yr} value={String(yr)}>{yr}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            )}
+
+            {exportType === 'period' && (
+              <div className="flex gap-3">
+                <div className="space-y-1.5 flex-1">
+                  <Label className="text-xs">From</Label>
+                  <Input type="date" value={dlStart} onChange={e => setDlStart(e.target.value)} />
+                </div>
+                <div className="space-y-1.5 flex-1">
+                  <Label className="text-xs">To</Label>
+                  <Input type="date" value={dlEnd} onChange={e => setDlEnd(e.target.value)} />
+                </div>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setExportOpen(false)}>Cancel</Button>
+            <Button onClick={handleDownload} className="gap-2 bg-navy-900 hover:bg-navy-800 text-gold-400">
+              <Download className="w-4 h-4" /> Download PDF
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Date range */}
       <div className="glass rounded-xl p-4 border border-border/40 flex flex-wrap items-end gap-4">
@@ -666,6 +790,28 @@ export default function Reports() {
         <Button variant="outline" size="sm" onClick={() => { setStartDate(format(subMonths(new Date(), 5), 'yyyy-MM-dd')); setEndDate(format(new Date(), 'yyyy-MM-dd')); }}>
           Reset
         </Button>
+        {role === 'Administrator' && campuses.length > 0 && (
+          <div className="space-y-1.5">
+            <Label className="text-xs">Branch</Label>
+            <Select value={selectedBranch} onValueChange={setSelectedBranch}>
+              <SelectTrigger className="w-[180px] h-9 text-sm">
+                <SelectValue placeholder="All Branches" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Branches</SelectItem>
+                {campuses.map(c => (
+                  <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+        {role === 'Branch Pastor' && activeBranchName !== 'All Branches' && (
+          <div className="space-y-1.5">
+            <Label className="text-xs">Branch</Label>
+            <p className="text-sm font-medium h-9 flex items-center px-3 rounded-md border border-border/40 bg-muted/30">{activeBranchName}</p>
+          </div>
+        )}
         <div className="flex items-center gap-1.5">
           <span className="text-xs text-muted-foreground">Full year:</span>
           {[currentYear - 1, currentYear].map(yr => (

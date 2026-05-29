@@ -1,19 +1,21 @@
+import React from 'react';
 import { NavLink } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   LayoutDashboard, Users, CalendarCheck, Coins,
   CalendarDays, Settings, MessageSquare, MessageCircle, PieChart, Building2, X,
-  Heart, HeartHandshake, ClipboardList, Target, LogOut, Church, UserPlus,
+  Heart, HeartHandshake, ClipboardList, Target, LogOut, UserPlus,
   UserCheck, BellRing, Baby, PlayCircle, Network, Megaphone, Boxes, ChevronDown,
-  ListTodo,
+  ListTodo, Landmark, Lock,
 } from 'lucide-react';
 import { cn } from '@/utils';
 import { useRole, type UserRole } from '@/context/RoleContext';
 import { useAuth } from '@/context/AuthContext';
 import { useData } from '@/context/DataContext';
 import { useCampus } from '@/context/CampusContext';
+import { usePackage, type PlanFeatures } from '@/context/PackageContext';
 
-const navGroups = [
+const navGroups: { label: string | null; items: { name: string; path: string; icon: React.ElementType; planFeature?: keyof PlanFeatures }[] }[] = [
   {
     label: null,
     items: [
@@ -36,31 +38,32 @@ const navGroups = [
       { name: 'Events', path: '/events', icon: CalendarDays },
       { name: 'Departments', path: '/departments', icon: Building2 },
       { name: 'Cell Groups', path: '/cells', icon: Network },
-      { name: 'Volunteers', path: '/volunteers', icon: ClipboardList },
+      { name: 'Volunteers', path: '/volunteers', icon: ClipboardList, planFeature: 'volunteers' },
     ],
   },
   {
     label: 'Finance',
     items: [
       { name: 'Tithes & Giving', path: '/giving', icon: Coins },
-      { name: 'Pledges', path: '/pledges', icon: Target },
+      { name: 'Accounting', path: '/accounting', icon: Landmark, planFeature: 'accounting' },
+      { name: 'Pledges', path: '/pledges', icon: Target, planFeature: 'pledges' },
     ],
   },
   {
     label: 'Care & Outreach',
     items: [
-      { name: 'Prayer Requests', path: '/prayer', icon: Heart },
-      { name: 'Pastoral Care', path: '/pastoral', icon: HeartHandshake },
+      { name: 'Prayer Requests', path: '/prayer', icon: Heart, planFeature: 'prayerPastoral' },
+      { name: 'Pastoral Care', path: '/pastoral', icon: HeartHandshake, planFeature: 'prayerPastoral' },
       { name: 'Outreach & Evangelism', path: '/outreach', icon: Megaphone },
     ],
   },
   {
     label: 'Communication',
     items: [
-      { name: 'Communication', path: '/communication', icon: MessageSquare },
-      { name: 'WhatsApp', path: '/whatsapp', icon: MessageCircle },
+      { name: 'Communication', path: '/communication', icon: MessageSquare, planFeature: 'bulkMessaging' },
+      { name: 'WhatsApp', path: '/whatsapp', icon: MessageCircle, planFeature: 'bulkMessaging' },
       { name: 'Task Assignment', path: '/tasks', icon: ListTodo },
-      { name: 'Automation', path: '/automation', icon: BellRing },
+      { name: 'Automation', path: '/automation', icon: BellRing, planFeature: 'bulkMessaging' },
     ],
   },
   {
@@ -97,6 +100,7 @@ function SidebarContent({ onClose }: { onClose: () => void }) {
   const { profile, signOut } = useAuth();
   const { campuses } = useData();
   const { selectedCampusId, setSelectedCampusId, isLocked } = useCampus();
+  const { hasFeature } = usePackage();
 
   const visibleGroups = navGroups
     .map(g => ({ ...g, items: g.items.filter(item => canAccess(item.path)) }))
@@ -110,12 +114,10 @@ function SidebarContent({ onClose }: { onClose: () => void }) {
       {/* Header */}
       <div className="p-6 flex items-center justify-between">
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 bg-gold-500 rounded-sm flex items-center justify-center text-navy-900">
-            <Church className="w-4 h-4" />
-          </div>
+          <img src="/logo.png" alt="Faith ChurchCare" className="h-10 w-10 object-contain rounded-md bg-white p-0.5 shrink-0" />
           <div>
-            <h1 className="text-xl font-display font-bold text-gold-500 tracking-tight leading-tight">ChurchCare</h1>
-            <p className="text-[10px] text-navy-500 uppercase tracking-widest font-semibold leading-tight">Manage. Serve. Grow.</p>
+            <p className="text-sm font-bold text-gold-400 leading-tight tracking-tight">Faith ChurchCare</p>
+            <p className="text-[10px] text-navy-400 uppercase tracking-widest font-semibold leading-tight">Manage. Serve. Grow.</p>
           </div>
         </div>
         <button
@@ -165,32 +167,38 @@ function SidebarContent({ onClose }: { onClose: () => void }) {
               </p>
             )}
             <div className="space-y-0.5">
-              {group.items.map(item => (
-                <NavLink
-                  key={item.path}
-                  to={item.path}
-                  end={item.path === '/'}
-                  onClick={onClose}
-                  className={({ isActive }) =>
-                    cn(
-                      'flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-150 group relative text-sm font-medium',
-                      isActive
-                        ? 'bg-navy-800 text-white'
-                        : 'text-navy-300 hover:bg-navy-800/60 hover:text-white'
-                    )
-                  }
-                >
-                  {({ isActive }) => (
-                    <>
-                      {isActive && (
-                        <span className="absolute left-0 top-2 bottom-2 w-0.5 bg-gold-500 rounded-r-full" />
-                      )}
-                      <item.icon className={cn('w-4 h-4 shrink-0', isActive ? 'text-gold-400' : 'text-navy-500 group-hover:text-navy-300')} />
-                      {item.name}
-                    </>
-                  )}
-                </NavLink>
-              ))}
+              {group.items.map(item => {
+                const locked = item.planFeature ? !hasFeature(item.planFeature) : false;
+                return (
+                  <NavLink
+                    key={item.path}
+                    to={item.path}
+                    end={item.path === '/'}
+                    onClick={onClose}
+                    className={({ isActive }) =>
+                      cn(
+                        'flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-150 group relative text-sm font-medium',
+                        isActive
+                          ? 'bg-navy-800 text-white'
+                          : locked
+                            ? 'text-navy-600 hover:bg-navy-800/40 hover:text-navy-400'
+                            : 'text-navy-300 hover:bg-navy-800/60 hover:text-white'
+                      )
+                    }
+                  >
+                    {({ isActive }) => (
+                      <>
+                        {isActive && (
+                          <span className="absolute left-0 top-2 bottom-2 w-0.5 bg-gold-500 rounded-r-full" />
+                        )}
+                        <item.icon className={cn('w-4 h-4 shrink-0', isActive ? 'text-gold-400' : locked ? 'text-navy-700' : 'text-navy-500 group-hover:text-navy-300')} />
+                        <span className="flex-1">{item.name}</span>
+                        {locked && <Lock className="w-3 h-3 text-navy-700 shrink-0" />}
+                      </>
+                    )}
+                  </NavLink>
+                );
+              })}
             </div>
           </div>
         ))}

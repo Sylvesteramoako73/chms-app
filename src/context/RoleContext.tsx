@@ -4,27 +4,27 @@ import type { UserRole } from '@/types';
 
 const ROLE_ACCESS: Record<UserRole, string[]> = {
   Administrator: [
-    '/', '/members', '/attendance', '/giving', '/events', '/departments',
+    '/', '/members', '/attendance', '/giving', '/accounting', '/events', '/departments',
     '/communication', '/reports', '/settings', '/prayer', '/pastoral',
     '/volunteers', '/pledges', '/visitors', '/outreach', '/assets',
-    '/workers', '/automation', '/children', '/media', '/cells', '/tasks',
+    '/workers', '/automation', '/children', '/media', '/cells', '/tasks', '/upgrade',
   ],
   'Branch Pastor': [
-    '/', '/members', '/attendance', '/giving', '/communication',
+    '/', '/members', '/attendance', '/giving', '/accounting', '/communication',
     '/reports', '/prayer', '/pastoral', '/volunteers', '/pledges', '/events', '/visitors', '/outreach', '/assets',
-    '/workers', '/children', '/media', '/cells', '/tasks', '/whatsapp',
+    '/workers', '/children', '/media', '/cells', '/tasks', '/whatsapp', '/upgrade',
   ],
   Pastor: [
-    '/', '/members', '/attendance', '/giving', '/communication',
+    '/', '/members', '/attendance', '/giving', '/accounting', '/communication',
     '/reports', '/prayer', '/pastoral', '/volunteers', '/pledges', '/events', '/visitors', '/outreach', '/assets',
-    '/workers', '/automation', '/children', '/media', '/cells', '/tasks', '/whatsapp',
+    '/workers', '/automation', '/children', '/media', '/cells', '/tasks', '/whatsapp', '/upgrade',
   ],
   'Department Head': [
     '/', '/members', '/attendance', '/events', '/prayer', '/volunteers', '/outreach', '/assets',
-    '/workers', '/children', '/media', '/cells', '/tasks',
+    '/workers', '/children', '/media', '/cells', '/tasks', '/upgrade',
   ],
   'Data Entry': [
-    '/', '/attendance', '/giving', '/children', '/tasks',
+    '/', '/attendance', '/giving', '/children', '/tasks', '/upgrade',
   ],
 };
 

@@ -21,7 +21,7 @@ import {
   MessageCircle, Smartphone, User, ChevronDown, Send,
 } from 'lucide-react';
 import { cn } from '@/utils';
-import { getWACredentials, sendWAMessage, sendWABulk } from '@/lib/whatsapp';
+import { openWhatsAppTo, openWhatsAppBroadcast, sendWhatsAppViaServer, sendWhatsAppBulkViaServer } from '@/lib/whatsapp';
 
 // ── Role assignment hierarchy ──────────────────────────────────────────────
 const ASSIGNABLE_ROLES: Record<UserRole, UserRole[]> = {
@@ -249,18 +249,15 @@ export default function Tasks() {
     const phone = task.assignedToPhone.replace(/\D/g, '');
 
     if (task.notificationChannel === 'WhatsApp') {
-      const creds = profile?.id ? getWACredentials(profile.id) : null;
-      if (!creds) {
-        toast({ title: 'WhatsApp not configured', description: 'Go to Settings → WhatsApp and enter your API credentials.', variant: 'destructive' });
-        return;
+      if (profile?.id) {
+        const ok = await sendWhatsAppViaServer(profile.id, phone, message);
+        if (ok) {
+          toast({ title: 'WhatsApp sent', description: `Message delivered to ${task.assignedToName}.` });
+          return;
+        }
       }
-      try {
-        const result = await sendWAMessage(creds, phone, message);
-        if (!result.ok) throw new Error(result.error);
-        toast({ title: 'WhatsApp sent', description: `Message delivered to ${task.assignedToName}` });
-      } catch (err) {
-        toast({ title: 'WhatsApp send failed', description: err instanceof Error ? err.message : 'Unknown error', variant: 'destructive' });
-      }
+      openWhatsAppTo(phone, message);
+      toast({ title: 'WhatsApp opened', description: `Sending to ${task.assignedToName} — tap Send in WhatsApp.` });
     } else {
       let smsSettings = { apiKey: '', senderId: 'ChurchCare' };
       try { smsSettings = { ...smsSettings, ...JSON.parse(localStorage.getItem('chms_sms_settings') ?? '{}') }; } catch { /* */ }
@@ -297,17 +294,15 @@ export default function Tasks() {
     if (clean.length === 0) return;
 
     if (channel === 'WhatsApp') {
-      const creds = profile?.id ? getWACredentials(profile.id) : null;
-      if (!creds) {
-        toast({ title: 'WhatsApp not configured', description: 'Go to Settings → WhatsApp and enter your API credentials.', variant: 'destructive' });
-        return;
+      if (profile?.id) {
+        const ok = await sendWhatsAppBulkViaServer(profile.id, clean, message);
+        if (ok) {
+          toast({ title: 'WhatsApp sent', description: `Messages delivered to ${label}.` });
+          return;
+        }
       }
-      try {
-        const { sent, failed } = await sendWABulk(creds, clean, message);
-        toast({ title: 'WhatsApp sent', description: `${sent} sent to ${label}${failed ? `, ${failed} failed` : ''}` });
-      } catch (err) {
-        toast({ title: 'WhatsApp send failed', description: err instanceof Error ? err.message : 'Unknown error', variant: 'destructive' });
-      }
+      openWhatsAppBroadcast(message);
+      toast({ title: 'WhatsApp opened', description: `Pick your group in WhatsApp and tap Send to notify ${label}.` });
     } else {
       let smsSettings = { apiKey: '', senderId: 'ChurchCare' };
       try { smsSettings = { ...smsSettings, ...JSON.parse(localStorage.getItem('chms_sms_settings') ?? '{}') }; } catch { /* */ }
@@ -316,17 +311,30 @@ export default function Tasks() {
         return;
       }
       try {
-        const res = await fetch(`${API_BASE}/api/sms/send-bulk`, {
+        function normaliseMsisdn(raw: string): string {
+          let n = raw.replace(/\D/g, '');
+          if (n.startsWith('00')) n = n.slice(2);
+          if (n.startsWith('0')) n = '233' + n.slice(1);
+          if (!n.startsWith('233')) n = '233' + n;
+          return n;
+        }
+        const normalised = clean.map(normaliseMsisdn).filter(n => n.length >= 11);
+        const url = `https://api.mnotify.com/api/sms/quick?key=${encodeURIComponent(smsSettings.apiKey.trim())}`;
+        const res = await fetch(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ numbers: clean, message, apiKey: smsSettings.apiKey.trim(), senderId: smsSettings.senderId || 'ChurchCare' }),
+          body: JSON.stringify({ recipient: normalised, sender: (smsSettings.senderId || 'ChurchCare').slice(0, 11), message, is_schedule: false, schedule_date: '' }),
         });
-        const data = await res.json() as { success?: boolean };
-        if (data.success) {
+        const data = await res.json() as { status?: string; code?: number; message?: string };
+        if (data.status === 'success' || data.code === 1000) {
           toast({ title: 'SMS sent', description: `SMS sent to ${label}` });
-        } else { throw new Error(); }
-      } catch {
-        toast({ title: 'SMS send failed', description: 'Check your mNotify API key and balance.', variant: 'destructive' });
+        } else {
+          const hint = data.code === 1004 ? ' Check your API key in Settings.' : data.code === 1006 ? ' Top up your mNotify balance.' : '';
+          throw new Error((data.message ?? `mNotify error ${data.code}`) + hint);
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Unknown error';
+        toast({ title: 'SMS send failed', description: msg, variant: 'destructive' });
       }
     }
   };

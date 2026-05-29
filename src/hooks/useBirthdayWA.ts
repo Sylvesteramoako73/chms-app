@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useData } from '@/context/DataContext';
-import { API_BASE } from '@/lib/api';
+import { useAuth } from '@/context/AuthContext';
+import { openWhatsAppTo, sendWhatsAppViaServer } from '@/lib/whatsapp';
 import { format, getMonth, getDate } from 'date-fns';
 
 const SETTINGS_KEY = 'chms_birthday_wa';
@@ -13,6 +14,7 @@ interface BWASettings {
 
 export function useBirthdayWA() {
   const { members } = useData();
+  const { profile } = useAuth();
 
   useEffect(() => {
     if (members.length === 0) return;
@@ -28,63 +30,45 @@ export function useBirthdayWA() {
     const todayMonth = getMonth(today);
     const todayDay = getDate(today);
 
-    async function doSend() {
-      try {
-        const res = await fetch(`${API_BASE}/api/whatsapp/status`);
-        const { status } = await res.json() as { status: string };
-        if (status !== 'connected') return;
+    const run = async () => {
+      let sent = 0;
 
-        const sends: Promise<void>[] = [];
-
-        if (settings.birthdayEnabled) {
-          members
-            .filter(m => {
-              if (!m.dateOfBirth || !m.phone) return false;
-              const d = new Date(m.dateOfBirth);
-              return getMonth(d) === todayMonth && getDate(d) === todayDay;
-            })
-            .forEach(m => {
-              const msg = `Happy Birthday, ${m.firstName}! 🎂 Wishing you a day filled with God's blessings and joy. With love, from your church family.`;
-              sends.push(
-                fetch(`${API_BASE}/api/whatsapp/send`, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ number: m.phone, message: msg }),
-                }).then(() => undefined)
-              );
-            });
+      if (settings.birthdayEnabled) {
+        const targets = members.filter(m => {
+          if (!m.dateOfBirth || !m.phone) return false;
+          const d = new Date(m.dateOfBirth);
+          return getMonth(d) === todayMonth && getDate(d) === todayDay;
+        });
+        for (const m of targets) {
+          const msg = `Happy Birthday, ${m.firstName}! 🎂 Wishing you a day filled with God's blessings and joy. With love, from your church family.`;
+          const ok = profile?.id ? await sendWhatsAppViaServer(profile.id, m.phone!, msg) : false;
+          if (!ok) openWhatsAppTo(m.phone!, msg);
+          sent++;
         }
-
-        if (settings.anniversaryEnabled) {
-          members
-            .filter(m => {
-              if (!m.joinDate || !m.phone) return false;
-              const d = new Date(m.joinDate);
-              if (d.getFullYear() === today.getFullYear()) return false;
-              return getMonth(d) === todayMonth && getDate(d) === todayDay;
-            })
-            .forEach(m => {
-              const years = today.getFullYear() - new Date(m.joinDate).getFullYear();
-              const msg = `Happy ${years}-year Church Anniversary, ${m.firstName}! 🎉 Thank you for being a faithful part of our congregation. God bless you abundantly!`;
-              sends.push(
-                fetch(`${API_BASE}/api/whatsapp/send`, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ number: m.phone, message: msg }),
-                }).then(() => undefined)
-              );
-            });
-        }
-
-        if (sends.length > 0) {
-          await Promise.allSettled(sends);
-          localStorage.setItem(sentKey(), '1');
-        }
-      } catch {
-        // WhatsApp server offline — skip silently
       }
-    }
 
-    doSend();
-  }, [members]);
+      if (settings.anniversaryEnabled) {
+        const targets = members.filter(m => {
+          if (!m.joinDate || !m.phone) return false;
+          const d = new Date(m.joinDate);
+          if (d.getFullYear() === today.getFullYear()) return false;
+          return getMonth(d) === todayMonth && getDate(d) === todayDay;
+        });
+        for (const m of targets) {
+          const years = today.getFullYear() - new Date(m.joinDate).getFullYear();
+          const msg = `Happy ${years}-year Church Anniversary, ${m.firstName}! 🎉 Thank you for being a faithful part of our congregation. God bless you abundantly!`;
+          const ok = profile?.id ? await sendWhatsAppViaServer(profile.id, m.phone!, msg) : false;
+          if (!ok) openWhatsAppTo(m.phone!, msg);
+          sent++;
+        }
+      }
+
+      if (sent > 0) {
+        localStorage.setItem(sentKey(), '1');
+      }
+    };
+
+    run();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [members, profile?.id]);
 }

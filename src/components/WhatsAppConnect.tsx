@@ -1,98 +1,123 @@
-import { useState } from 'react';
-import { CheckCircle2, Unplug, Send, Eye, EyeOff } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import {
-  getWACredentials,
-  saveWACredentials,
-  clearWACredentials,
-  sendWAMessage,
-  type WACredentials,
-} from '@/lib/whatsapp';
+import { Loader2, CheckCircle2, Unplug, RefreshCw, AlertTriangle } from 'lucide-react';
+import { API_BASE } from '@/lib/api';
 
-interface Props {
-  userId?: string;
+type WaStatus = 'disconnected' | 'connecting' | 'qr' | 'connected';
+
+interface WaState {
+  status: WaStatus;
+  qr: string | null;
+  phone: string | null;
 }
 
-export function WhatsAppConnect({ userId = 'default' }: Props) {
-  const [creds, setCreds] = useState<WACredentials | null>(() => getWACredentials(userId));
-  const [form, setForm] = useState({ phoneNumberId: '', accessToken: '' });
-  const [showToken, setShowToken] = useState(false);
-  const [testPhone, setTestPhone] = useState('');
-  const [testing, setTesting] = useState(false);
-  const [testResult, setTestResult] = useState<string | null>(null);
+function WhatsAppIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
+    </svg>
+  );
+}
 
-  const handleSave = () => {
-    if (!form.phoneNumberId.trim() || !form.accessToken.trim()) return;
-    const newCreds: WACredentials = {
-      phoneNumberId: form.phoneNumberId.trim(),
-      accessToken: form.accessToken.trim(),
+const STEPS = [
+  'Open WhatsApp on your phone',
+  'Tap Menu (⋮) → Linked Devices',
+  'Tap "Link a Device"',
+  'Point your phone camera at this QR code',
+];
+
+interface Props {
+  sessionId?: string;
+}
+
+export function WhatsAppConnect({ sessionId = 'default' }: Props) {
+  const [state, setState] = useState<WaState>({ status: 'disconnected', qr: null, phone: null });
+  const [serverOffline, setServerOffline] = useState(false);
+  const esRef = useRef<EventSource | null>(null);
+
+  const connectSSE = () => {
+    if (esRef.current) esRef.current.close();
+    const es = new EventSource(`${API_BASE}/api/whatsapp/events?sessionId=${encodeURIComponent(sessionId)}`);
+    esRef.current = es;
+
+    es.onmessage = (e) => {
+      try {
+        const data = JSON.parse(e.data);
+        if (data.type === 'state' || data.type === 'qr') {
+          setState({ status: data.status, qr: data.qr ?? null, phone: data.phone ?? null });
+        }
+        setServerOffline(false);
+      } catch (_) { /* ignore */ }
     };
-    saveWACredentials(userId, newCreds);
-    setCreds(newCreds);
-    setForm({ phoneNumberId: '', accessToken: '' });
+
+    es.onerror = () => {
+      setServerOffline(true);
+      es.close();
+      esRef.current = null;
+      setTimeout(connectSSE, 5000);
+    };
   };
 
-  const handleDisconnect = () => {
-    clearWACredentials(userId);
-    setCreds(null);
-    setTestResult(null);
+  useEffect(() => {
+    connectSSE();
+    return () => { esRef.current?.close(); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId]);
+
+  const handleConnect = async () => {
+    setServerOffline(false);
+    await fetch(`${API_BASE}/api/whatsapp/connect`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId }),
+    }).catch(() => setServerOffline(true));
   };
 
-  const handleTest = async () => {
-    if (!creds || !testPhone.trim()) return;
-    setTesting(true);
-    setTestResult(null);
-    const result = await sendWAMessage(creds, testPhone.trim(), '✅ Test message from ChurchCare — WhatsApp is connected!');
-    setTesting(false);
-    setTestResult(result.ok ? 'success' : (result.error ?? 'Send failed'));
+  const handleDisconnect = async () => {
+    await fetch(`${API_BASE}/api/whatsapp/disconnect`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId }),
+    }).catch(() => setServerOffline(true));
   };
 
-  if (creds) {
+  if (serverOffline) {
     return (
-      <div className="space-y-4">
-        <div className="flex items-center gap-3 p-4 rounded-lg bg-green-500/10 border border-green-200 dark:border-green-800/40">
-          <CheckCircle2 className="w-5 h-5 text-green-500 shrink-0" />
-          <div>
-            <p className="text-sm font-semibold text-green-700 dark:text-green-400">WhatsApp Business Connected</p>
-            <p className="text-xs text-muted-foreground font-mono">ID: {creds.phoneNumberId}</p>
-          </div>
+      <div className="flex flex-col items-center gap-4 py-10 text-center">
+        <div className="w-14 h-14 rounded-full bg-amber-500/10 flex items-center justify-center">
+          <AlertTriangle className="w-7 h-7 text-amber-500" />
         </div>
-
-        <div className="space-y-2">
-          <Label className="text-xs">Send a test message</Label>
-          <div className="flex gap-2">
-            <Input
-              placeholder="+233 XX XXX XXXX"
-              value={testPhone}
-              onChange={e => { setTestPhone(e.target.value); setTestResult(null); }}
-              className="flex-1"
-            />
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-2 shrink-0"
-              onClick={handleTest}
-              disabled={testing || !testPhone.trim()}
-            >
-              <Send className="w-3.5 h-3.5" />
-              {testing ? 'Sending…' : 'Test'}
-            </Button>
-          </div>
-          {testResult === 'success' && (
-            <p className="text-xs text-green-600 dark:text-green-400">✓ Message sent successfully</p>
-          )}
-          {testResult && testResult !== 'success' && (
-            <p className="text-xs text-destructive">{testResult}</p>
-          )}
+        <div>
+          <p className="font-semibold text-sm">WhatsApp service is temporarily unavailable</p>
+          <p className="text-xs text-muted-foreground mt-1">The messaging server is starting up. Please wait a moment.</p>
         </div>
+        <Button variant="outline" size="sm" className="gap-2" onClick={connectSSE}>
+          <RefreshCw className="w-4 h-4" /> Retry
+        </Button>
+      </div>
+    );
+  }
 
+  if (state.status === 'connected') {
+    return (
+      <div className="flex flex-col items-center gap-5 py-8 text-center">
+        <div className="w-16 h-16 rounded-full bg-green-500/10 flex items-center justify-center">
+          <CheckCircle2 className="w-8 h-8 text-green-500" />
+        </div>
+        <div>
+          <p className="font-semibold text-green-700 dark:text-green-400">WhatsApp Connected</p>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            Linked to <span className="font-mono font-medium">+{state.phone}</span>
+          </p>
+          <p className="text-xs text-muted-foreground mt-1 max-w-xs mx-auto">
+            Messages from Communication, Automation, and Task Assignment will be delivered from this number.
+          </p>
+        </div>
         <Button
           variant="outline"
           size="sm"
-          className="gap-2 border-red-300 text-red-600 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950/30"
           onClick={handleDisconnect}
+          className="gap-2 border-red-300 text-red-600 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950/30"
         >
           <Unplug className="w-4 h-4" /> Disconnect
         </Button>
@@ -100,56 +125,62 @@ export function WhatsAppConnect({ userId = 'default' }: Props) {
     );
   }
 
-  return (
-    <div className="space-y-5">
-      <div className="p-3 rounded-lg bg-blue-500/5 border border-blue-200 dark:border-blue-800/40 text-xs text-blue-700 dark:text-blue-400 space-y-1.5">
-        <p className="font-semibold">One-time setup (free via Meta):</p>
-        <ol className="list-decimal list-inside space-y-0.5 leading-relaxed">
-          <li>Go to <strong>developers.facebook.com</strong> → My Apps → Create App → Business</li>
-          <li>Add the <strong>WhatsApp</strong> product to your app</li>
-          <li>Under WhatsApp → API Setup, copy your <strong>Phone Number ID</strong></li>
-          <li>Generate a <strong>Permanent System User Token</strong> with <code className="bg-black/10 px-1 rounded">whatsapp_business_messaging</code> permission</li>
-          <li>Paste both below and click Save</li>
-        </ol>
-      </div>
-
-      <div className="space-y-3">
-        <div className="space-y-1.5">
-          <Label>Phone Number ID</Label>
-          <Input
-            placeholder="e.g. 123456789012345"
-            value={form.phoneNumberId}
-            onChange={e => setForm(f => ({ ...f, phoneNumberId: e.target.value }))}
-          />
-        </div>
-        <div className="space-y-1.5">
-          <Label>Permanent Access Token</Label>
-          <div className="relative">
-            <Input
-              type={showToken ? 'text' : 'password'}
-              placeholder="EAAxxxxxxxxxxxxxx…"
-              value={form.accessToken}
-              onChange={e => setForm(f => ({ ...f, accessToken: e.target.value }))}
-              className="pr-10"
-            />
-            <button
-              type="button"
-              onClick={() => setShowToken(v => !v)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-            >
-              {showToken ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-            </button>
+  if (state.status === 'qr' && state.qr) {
+    return (
+      <div className="flex flex-col lg:flex-row gap-8 items-center py-4">
+        <div className="shrink-0">
+          <div className="w-56 h-56 rounded-2xl border-4 border-green-400 p-2 bg-white shadow-lg">
+            <img src={state.qr} alt="WhatsApp QR Code" className="w-full h-full rounded-xl" />
           </div>
+          <p className="text-xs text-center text-muted-foreground mt-2">Scan with WhatsApp</p>
+        </div>
+        <div className="space-y-4">
+          <div className="flex items-center gap-2 mb-1">
+            <WhatsAppIcon className="w-5 h-5 text-green-500" />
+            <p className="font-semibold text-sm">How to scan</p>
+          </div>
+          <ol className="space-y-3">
+            {STEPS.map((step, i) => (
+              <li key={i} className="flex items-start gap-3 text-sm">
+                <span className="shrink-0 w-5 h-5 rounded-full bg-green-500/10 text-green-600 dark:text-green-400 flex items-center justify-center text-[11px] font-bold mt-0.5">
+                  {i + 1}
+                </span>
+                <span className="text-muted-foreground">{step}</span>
+              </li>
+            ))}
+          </ol>
+          <p className="text-xs text-muted-foreground">
+            QR codes expire after 60 seconds. A new one will appear automatically.
+          </p>
         </div>
       </div>
+    );
+  }
 
-      <Button
-        onClick={handleSave}
-        disabled={!form.phoneNumberId.trim() || !form.accessToken.trim()}
-        className="gap-2 bg-green-600 hover:bg-green-700 text-white"
-      >
-        Save & Connect
-      </Button>
+  return (
+    <div className="flex flex-col items-center gap-5 py-10 text-center">
+      <div className="w-16 h-16 rounded-full bg-green-500/10 flex items-center justify-center">
+        {state.status === 'connecting' ? (
+          <Loader2 className="w-8 h-8 text-green-500 animate-spin" />
+        ) : (
+          <WhatsAppIcon className="w-8 h-8 text-green-500" />
+        )}
+      </div>
+      <div>
+        <p className="font-semibold text-sm">
+          {state.status === 'connecting' ? 'Connecting to WhatsApp…' : 'WhatsApp Not Connected'}
+        </p>
+        <p className="text-xs text-muted-foreground mt-1 max-w-xs">
+          {state.status === 'connecting'
+            ? 'Generating QR code — this takes a few seconds.'
+            : 'Link your WhatsApp number to send messages directly from ChurchCare.'}
+        </p>
+      </div>
+      {state.status === 'disconnected' && (
+        <Button onClick={handleConnect} className="gap-2 bg-green-600 hover:bg-green-700 text-white">
+          <WhatsAppIcon className="w-4 h-4" /> Connect WhatsApp
+        </Button>
+      )}
     </div>
   );
 }

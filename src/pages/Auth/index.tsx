@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Eye, EyeOff, Loader2, AlertCircle, Church } from 'lucide-react';
+import { Eye, EyeOff, Loader2, AlertCircle, Church, PlayCircle } from 'lucide-react';
 
 type Tab = 'login' | 'register';
 
@@ -18,7 +18,7 @@ const ROLES: { value: UserRole; label: string; desc: string }[] = [
 ];
 
 export default function AuthPage() {
-  const { signIn, signUp } = useAuth();
+  const { signIn, signUp, startDemo } = useAuth();
   const [tab, setTab] = useState<Tab>('login');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -44,6 +44,8 @@ export default function AuthPage() {
     setLoading(false);
     if (err) setError(err);
   };
+
+  const handleDemo = () => startDemo();
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -126,6 +128,23 @@ export default function AuthPage() {
                 {t === 'login' ? 'Sign In' : 'Create Account'}
               </button>
             ))}
+          </div>
+
+          {/* Demo CTA */}
+          <button
+            type="button"
+            onClick={handleDemo}
+            disabled={loading}
+            className="w-full mb-5 flex items-center justify-center gap-2.5 py-3 rounded-xl border-2 border-gold-500/40 bg-gold-500/10 hover:bg-gold-500/20 text-gold-400 font-semibold text-sm transition-all disabled:opacity-60"
+          >
+            <PlayCircle className="w-4 h-4" />
+            Try Demo — no sign-up needed
+          </button>
+
+          <div className="flex items-center gap-3 mb-5">
+            <div className="flex-1 h-px bg-navy-700" />
+            <span className="text-xs text-navy-500 font-medium">or continue with account</span>
+            <div className="flex-1 h-px bg-navy-700" />
           </div>
 
           <AnimatePresence mode="wait">

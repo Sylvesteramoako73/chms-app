@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { useData } from '@/context/DataContext';
 import { useCampus } from '@/context/CampusContext';
+import { usePackage } from '@/context/PackageContext';
 import type { Member, MemberStatus, Gender, MaritalStatus } from '@/types';
 import { getMemberAbsenceStreak } from '@/utils/attendanceUtils';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
@@ -41,7 +42,11 @@ const EMPTY_FORM: Omit<Member, 'id'> = {
 export default function Members() {
   const { members, departments, campuses, attendance, addMember, updateMember, deleteMember, importMembers } = useData();
   const { selectedCampusId } = useCampus();
+  const { features } = usePackage();
   const { toast } = useToast();
+  const memberLimit = features.memberLimit; // null = unlimited
+  const atLimit = memberLimit !== null && members.length >= memberLimit;
+  const nearLimit = memberLimit !== null && members.length >= memberLimit * 0.9 && !atLimit;
   const navigate = useNavigate();
   const csvInputRef = useRef<HTMLInputElement>(null);
 
@@ -82,6 +87,10 @@ export default function Members() {
   const handleSave = () => {
     if (!form.firstName.trim() || !form.lastName.trim()) {
       toast({ title: 'Validation error', description: 'First and last name are required.', variant: 'destructive' });
+      return;
+    }
+    if (!editing && atLimit) {
+      toast({ title: 'Member limit reached', description: `Your plan allows up to ${memberLimit} members. Upgrade to add more.`, variant: 'destructive' });
       return;
     }
     const fullName = `${form.firstName} ${form.lastName}`;
@@ -130,6 +139,16 @@ export default function Members() {
         toast({ title: 'Import failed', description: 'No valid rows found. Check CSV format.', variant: 'destructive' });
         return;
       }
+      if (memberLimit !== null && members.length + parsed.length > memberLimit) {
+        const allowed = memberLimit - members.length;
+        if (allowed <= 0) {
+          toast({ title: 'Member limit reached', description: `Your plan allows up to ${memberLimit} members. Upgrade to import more.`, variant: 'destructive' });
+          return;
+        }
+        toast({ title: 'Partial import', description: `Only ${allowed} of ${parsed.length} members imported — plan limit of ${memberLimit} reached.`, variant: 'destructive' });
+        importMembers(parsed.slice(0, allowed));
+        return;
+      }
       importMembers(parsed);
       toast({ title: 'Import successful', description: `${parsed.length} members imported.` });
     };
@@ -153,20 +172,36 @@ export default function Members() {
 
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-6">
+      {/* Member limit warnings */}
+      {atLimit && (
+        <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-destructive/10 border border-destructive/30 text-destructive text-sm font-medium">
+          <AlertTriangle className="w-4 h-4 shrink-0" />
+          <span>Member limit reached ({members.length}/{memberLimit}). Upgrade your plan in <strong>Settings → Subscription</strong> to add more.</span>
+        </div>
+      )}
+      {nearLimit && (
+        <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-400 text-sm font-medium">
+          <AlertTriangle className="w-4 h-4 shrink-0" />
+          <span>Approaching member limit ({members.length}/{memberLimit}). Consider upgrading your plan soon.</span>
+        </div>
+      )}
+
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-4xl font-display font-bold text-navy-900 dark:text-cream mb-1">Members</h1>
-          <p className="text-sm text-muted-foreground">{members.length} total · {members.filter(m => m.status === 'Active').length} active</p>
+          <p className="text-sm text-muted-foreground">
+            {members.length}{memberLimit !== null ? `/${memberLimit}` : ''} total · {members.filter(m => m.status === 'Active').length} active
+          </p>
         </div>
         <div className="flex flex-wrap gap-2">
           <input ref={csvInputRef} type="file" accept=".csv" className="hidden" onChange={handleImportCSV} />
-          <Button variant="outline" size="sm" onClick={() => csvInputRef.current?.click()} className="gap-2">
+          <Button variant="outline" size="sm" onClick={() => csvInputRef.current?.click()} className="gap-2" disabled={atLimit}>
             <Upload className="w-4 h-4" /> Import CSV
           </Button>
           <Button variant="outline" size="sm" onClick={exportCSV} className="gap-2">
             <Download className="w-4 h-4" /> Export CSV
           </Button>
-          <Button size="sm" onClick={openAdd} className="gap-2 bg-white hover:bg-gray-50 text-navy-900 font-medium">
+          <Button size="sm" onClick={openAdd} disabled={atLimit} className="gap-2 bg-white hover:bg-gray-50 text-navy-900 font-medium">
             <Plus className="w-4 h-4" /> Add Member
           </Button>
         </div>

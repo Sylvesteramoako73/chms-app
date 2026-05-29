@@ -14,9 +14,10 @@ import { Separator } from '@/components/ui/separator';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { Save, Upload, Church, Shield, Moon, Cog, Building2, ClipboardList, Pencil, Trash2, MessageCircle, MessageSquare, Users2, Loader2, UserPlus, Eye, EyeOff } from 'lucide-react';
+import { Save, Upload, Church, Shield, Moon, Cog, Building2, ClipboardList, Pencil, Trash2, MessageCircle, MessageSquare, Users2, Loader2, UserPlus, Eye, EyeOff, CreditCard, Check, KeyRound, Sparkles } from 'lucide-react';
 import { format } from 'date-fns';
 import { WhatsAppConnect } from '@/components/WhatsAppConnect';
+import { usePackage, PLAN_LABELS, planPriceDisplay, type Plan } from '@/context/PackageContext';
 
 const SERVICE_TYPES_DEFAULT = [
   'Sunday First Service',
@@ -38,6 +39,53 @@ const ROLE_BADGE: Record<UserRole, string> = {
   'Data Entry': 'bg-muted text-muted-foreground border-border',
 };
 
+const PLAN_HIGHLIGHTS: Record<Plan, string[]> = {
+  free: [
+    '1 branch · 1 user',
+    'Up to 50 members',
+    'Member profiles & attendance',
+    'Giving & tithe records',
+  ],
+  starter: [
+    'Up to 3 branches · 3 users',
+    'Up to 150 members',
+    'Everything in Free',
+    'Basic PDF reports',
+    'Event & visitor management',
+  ],
+  growth: [
+    'Up to 5 branches · 10 users',
+    'Up to 500 members',
+    'Everything in Starter',
+    'Bulk WhatsApp & SMS messaging',
+    'Pledge & fundraising · Accounting',
+    'Prayer & pastoral care',
+  ],
+  pro: [
+    'Up to 25 branches · 25 users',
+    'Up to 2,000 members',
+    'Everything in Growth',
+    'Role-based access control',
+    'Advanced analytics & reports',
+    'Volunteer management · Audit log',
+  ],
+  custom: [
+    'Unlimited branches & users',
+    'Unlimited members',
+    'Everything in Pro',
+    'Tailored to your church size',
+    'Priority support',
+  ],
+};
+
+const PLAN_COLORS: Record<Plan, { border: string; badgeBg: string; check: string; title: string }> = {
+  free:    { border: 'border-slate-400',  badgeBg: 'bg-slate-500/10 text-slate-600 dark:text-slate-400 border-slate-300/50',   check: 'text-slate-500',  title: 'text-slate-600 dark:text-slate-400'   },
+  starter: { border: 'border-sage-500',   badgeBg: 'bg-sage-500/10 text-sage-700 dark:text-sage-400 border-sage-300/50',       check: 'text-sage-500',   title: 'text-sage-700 dark:text-sage-400'     },
+  growth:  { border: 'border-gold-500',   badgeBg: 'bg-gold-500/10 text-gold-700 dark:text-gold-400 border-gold-300/50',       check: 'text-gold-500',   title: 'text-gold-700 dark:text-gold-400'     },
+  pro:     { border: 'border-purple-500', badgeBg: 'bg-purple-500/10 text-purple-700 dark:text-purple-400 border-purple-300/50', check: 'text-purple-500', title: 'text-purple-700 dark:text-purple-400' },
+  custom:  { border: 'border-blue-500',   badgeBg: 'bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-300/50',       check: 'text-blue-500',   title: 'text-blue-700 dark:text-blue-400'     },
+};
+
 export default function Settings() {
   const { theme, toggleTheme, departments, campuses, auditLogs, addCampus, updateCampus, deleteCampus } = useData();
   const { profile, allProfiles, updateUserProfile, createUser, deleteUser, refreshProfiles } = useAuth();
@@ -54,6 +102,10 @@ export default function Settings() {
   const [editUserOpen, setEditUserOpen] = useState(false);
   const [editUserLoading, setEditUserLoading] = useState(false);
   const [editUserForm, setEditUserForm] = useState({ id: '', name: '', email: '', phone: '', role: 'Data Entry' as UserRole, branchId: '' });
+  const { plan: currentPlan, features, activatePlan } = usePackage();
+  const [activationCode, setActivationCode] = useState('');
+  const [activating, setActivating] = useState(false);
+  const [activationError, setActivationError] = useState('');
 
   const [campusDialogOpen, setCampusDialogOpen] = useState(false);
   const [editingCampus, setEditingCampus] = useState<Campus | null>(null);
@@ -216,6 +268,7 @@ export default function Settings() {
             <TabsTrigger value="users" className="gap-2"><Users2 className="w-4 h-4" /> Users</TabsTrigger>
           )}
           <TabsTrigger value="whatsapp" className="gap-2"><MessageCircle className="w-4 h-4" /> WhatsApp</TabsTrigger>
+          <TabsTrigger value="subscription" className="gap-2"><CreditCard className="w-4 h-4" /> Subscription</TabsTrigger>
         </TabsList>
 
         {/* Church Profile Tab */}
@@ -432,9 +485,21 @@ export default function Settings() {
               <div className="flex items-center justify-between">
                 <div>
                   <CardTitle className="flex items-center gap-2"><Building2 className="w-5 h-5 text-navy-500" /> Branches</CardTitle>
-                  <CardDescription>{campuses.length} branch{campuses.length !== 1 ? 'es' : ''} configured.</CardDescription>
+                  <CardDescription>
+                    {campuses.length}{features.branchLimit !== null ? `/${features.branchLimit}` : ''} branch{campuses.length !== 1 ? 'es' : ''} configured.
+                    {features.branchLimit !== null && campuses.length >= features.branchLimit && (
+                      <span className="ml-2 text-amber-600 dark:text-amber-400 font-medium">Branch limit reached — upgrade to add more.</span>
+                    )}
+                  </CardDescription>
                 </div>
-                <Button size="sm" onClick={openAddCampus} className="gap-2 bg-white hover:bg-gray-50 text-navy-900 font-medium">Add Branch</Button>
+                <Button
+                  size="sm"
+                  onClick={openAddCampus}
+                  disabled={features.branchLimit !== null && campuses.length >= features.branchLimit}
+                  className="gap-2 bg-white hover:bg-gray-50 text-navy-900 font-medium disabled:opacity-50"
+                >
+                  Add Branch
+                </Button>
               </div>
             </CardHeader>
             <CardContent className="space-y-2">
@@ -526,13 +591,23 @@ export default function Settings() {
                 <div className="flex items-center justify-between gap-3 flex-wrap">
                   <div>
                     <CardTitle className="flex items-center gap-2"><Users2 className="w-5 h-5 text-navy-500" /> User Accounts</CardTitle>
-                    <CardDescription>{allProfiles.length} account{allProfiles.length !== 1 ? 's' : ''} registered</CardDescription>
+                    <CardDescription>
+                      {allProfiles.length}{features.userLimit !== null ? `/${features.userLimit}` : ''} account{allProfiles.length !== 1 ? 's' : ''} registered
+                      {features.userLimit !== null && allProfiles.length >= features.userLimit && (
+                        <span className="ml-2 text-amber-600 dark:text-amber-400 font-medium">User limit reached — upgrade to add more.</span>
+                      )}
+                    </CardDescription>
                   </div>
                   <div className="flex gap-2">
                     <Button variant="outline" size="sm" className="gap-2" onClick={refreshProfiles}>
                       <Loader2 className="w-3.5 h-3.5" /> Refresh
                     </Button>
-                    <Button size="sm" className="gap-2 bg-white hover:bg-gray-50 text-navy-900 font-medium" onClick={() => setAddUserOpen(true)}>
+                    <Button
+                      size="sm"
+                      className="gap-2 bg-white hover:bg-gray-50 text-navy-900 font-medium disabled:opacity-50"
+                      disabled={features.userLimit !== null && allProfiles.length >= features.userLimit}
+                      onClick={() => setAddUserOpen(true)}
+                    >
                       <UserPlus className="w-3.5 h-3.5" /> Add User
                     </Button>
                   </div>
@@ -598,9 +673,131 @@ export default function Settings() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <WhatsAppConnect userId={profile?.id} />
+              <WhatsAppConnect />
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* Subscription Tab */}
+        <TabsContent value="subscription" className="mt-0 space-y-4">
+          {/* Current plan banner */}
+          <Card className="glass border-none shadow-sm">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <CreditCard className="w-5 h-5 text-gold-500" /> Your Plan
+              </CardTitle>
+              <CardDescription>
+                You are currently on the <strong>{PLAN_LABELS[currentPlan]}</strong> plan.
+                {currentPlan === 'starter' && ' Activate a code below to unlock more features.'}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className={`rounded-xl border-2 p-5 ${PLAN_COLORS[currentPlan].border} bg-muted/20`}>
+                <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
+                  <div>
+                    <p className={`text-xl font-bold ${PLAN_COLORS[currentPlan].title}`}>{PLAN_LABELS[currentPlan]} Plan</p>
+                    <p className="text-sm text-muted-foreground">{planPriceDisplay(currentPlan)}</p>
+                  </div>
+                  <span className={`px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider border ${PLAN_COLORS[currentPlan].badgeBg}`}>
+                    Active
+                  </span>
+                </div>
+                <ul className="space-y-1.5">
+                  {PLAN_HIGHLIGHTS[currentPlan].map(h => (
+                    <li key={h} className="flex items-start gap-2 text-sm">
+                      <Check className={`w-4 h-4 shrink-0 mt-0.5 ${PLAN_COLORS[currentPlan].check}`} />
+                      <span className="text-muted-foreground">{h}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Plan comparison */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+            {(['free', 'starter', 'growth', 'pro', 'custom'] as Plan[]).map(p => {
+              const isCurrent = p === currentPlan;
+              const colors = PLAN_COLORS[p];
+              return (
+                <div key={p} className={`relative rounded-xl border-2 p-5 flex flex-col gap-3 ${isCurrent ? `${colors.border} bg-muted/20` : 'border-border/40 bg-muted/5 opacity-70'}`}>
+                  {isCurrent && (
+                    <span className={`absolute -top-3 left-1/2 -translate-x-1/2 whitespace-nowrap px-3 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-wider border ${colors.badgeBg}`}>
+                      Current
+                    </span>
+                  )}
+                  <div>
+                    <p className={`text-base font-bold ${isCurrent ? colors.title : ''}`}>{PLAN_LABELS[p]}</p>
+                    <p className="text-sm text-muted-foreground">{planPriceDisplay(p)}</p>
+                  </div>
+                  <ul className="space-y-1 flex-1">
+                    {PLAN_HIGHLIGHTS[p].map(h => (
+                      <li key={h} className="flex items-start gap-2 text-xs">
+                        <Check className={`w-3.5 h-3.5 shrink-0 mt-0.5 ${colors.check}`} />
+                        <span className="text-muted-foreground">{h}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Activation code — only show if not already on Pro, and only to admins */}
+          {actions.canManageUsers && currentPlan !== 'pro' && (
+            <Card className="glass border-none shadow-sm">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <KeyRound className="w-5 h-5 text-gold-500" /> Activate Your Plan
+                </CardTitle>
+                <CardDescription>
+                  Enter the activation code you received after purchasing a Growth or Pro plan.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="e.g. GRACE-CHAPEL-PRO-2024"
+                    value={activationCode}
+                    onChange={e => { setActivationCode(e.target.value.toUpperCase()); setActivationError(''); }}
+                    className="font-mono tracking-widest uppercase"
+                    disabled={activating}
+                  />
+                  <Button
+                    className="gap-2 bg-gold-500 hover:bg-gold-600 text-navy-900 font-semibold shrink-0"
+                    disabled={activating || !activationCode.trim()}
+                    onClick={async () => {
+                      setActivating(true);
+                      setActivationError('');
+                      const { error, plan } = await activatePlan(activationCode);
+                      setActivating(false);
+                      if (error) {
+                        setActivationError(error);
+                      } else {
+                        setActivationCode('');
+                        toast({ title: '🎉 Plan activated!', description: `Your account has been upgraded to the ${PLAN_LABELS[plan!]} plan.` });
+                      }
+                    }}
+                  >
+                    {activating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                    {activating ? 'Activating…' : 'Activate'}
+                  </Button>
+                </div>
+                {activationError && (
+                  <p className="text-sm text-destructive flex items-center gap-1.5">
+                    <span>⚠</span> {activationError}
+                  </p>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  Don't have a code?{' '}
+                  <a href="mailto:support@faithchurchcare.com" className="underline underline-offset-2 hover:text-foreground transition-colors">
+                    Contact us
+                  </a>{' '}
+                  to purchase a Growth or Pro plan.
+                </p>
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
       </Tabs>
 

@@ -14,7 +14,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { Send, Clock, Mail, MessageSquare, Megaphone, CheckCircle, Loader2, AlertCircle, Wifi } from 'lucide-react';
 import { format, subDays } from 'date-fns';
-import { getWACredentials, sendWABulk } from '@/lib/whatsapp';
+import { openWhatsAppBroadcast, sendWhatsAppBulkViaServer } from '@/lib/whatsapp';
+import { normaliseMsisdn } from '@/lib/messaging';
 
 // WhatsApp icon as inline SVG to avoid extra dependencies
 function WhatsAppIcon({ className }: { className?: string }) {
@@ -98,7 +99,7 @@ export default function Communication() {
   };
 
   const [waSending, setWaSending] = useState(false);
-  const waStatus = profile?.id ? (getWACredentials(profile.id) ? 'connected' : 'disconnected') : 'disconnected';
+  const isWaConfigured = true;
 
   const sendViaSMS = async (phones: string[], text: string) => {
     if (phones.length === 0) {
@@ -221,22 +222,17 @@ export default function Communication() {
       toast({ title: 'No phone numbers', description: 'None of the selected recipients have a phone number.', variant: 'destructive' });
       return false;
     }
-    const creds = profile?.id ? getWACredentials(profile.id) : null;
-    if (!creds) {
-      toast({ title: 'WhatsApp not configured', description: 'Go to Settings → WhatsApp and enter your API credentials.', variant: 'destructive' });
-      return false;
+    if (profile?.id) {
+      const normalised = phones.map(normaliseMsisdn).filter(n => n.length >= 10);
+      const ok = await sendWhatsAppBulkViaServer(profile.id, normalised, text);
+      if (ok) {
+        toast({ title: 'WhatsApp messages sent!', description: `Delivered to ${normalised.length} recipient${normalised.length !== 1 ? 's' : ''}.` });
+        return true;
+      }
     }
-    setWaSending(true);
-    try {
-      const { sent, failed } = await sendWABulk(creds, phones, text);
-      toast({ title: 'WhatsApp messages sent', description: `${sent} delivered, ${failed} failed.` });
-      return true;
-    } catch (err) {
-      toast({ title: 'Send failed', description: err instanceof Error ? err.message : 'Unknown error', variant: 'destructive' });
-      return false;
-    } finally {
-      setWaSending(false);
-    }
+    openWhatsAppBroadcast(text);
+    toast({ title: 'WhatsApp opened', description: 'Pick your church group in WhatsApp and tap Send.' });
+    return true;
   };
 
   const handleSend = async (msgStatus: 'Sent' | 'Scheduled' | 'Draft') => {
@@ -386,16 +382,14 @@ export default function Communication() {
                     <WhatsAppIcon className="w-4 h-4 text-green-600" />
                     <p className="text-sm font-medium text-green-800 dark:text-green-300">WhatsApp — Direct Send</p>
                   </div>
-                  <span className={`flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full border ${waStatus === 'connected' ? 'bg-green-100 text-green-700 border-green-300 dark:bg-green-950 dark:text-green-400 dark:border-green-800' : 'bg-amber-100 text-amber-700 border-amber-300 dark:bg-amber-950/30 dark:text-amber-400 dark:border-amber-800'}`}>
-                    {waStatus === 'connected' ? <Wifi className="w-3 h-3" /> : <AlertCircle className="w-3 h-3" />}
-                    {waStatus === 'connected' ? 'Connected' : 'Not connected'}
+                  <span className={`flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full border ${isWaConfigured ? 'bg-green-100 text-green-700 border-green-300 dark:bg-green-950 dark:text-green-400 dark:border-green-800' : 'bg-amber-100 text-amber-700 border-amber-300 dark:bg-amber-950/30 dark:text-amber-400 dark:border-amber-800'}`}>
+                    {isWaConfigured ? <Wifi className="w-3 h-3" /> : <AlertCircle className="w-3 h-3" />}
+                    Ready
                   </span>
                 </div>
-                {waStatus !== 'connected' && (
-                  <p className="text-xs text-amber-700 dark:text-amber-400">
-                    Go to <strong>Settings → WhatsApp</strong> and scan the QR code to enable direct sending.
-                  </p>
-                )}
+                <p className="text-xs text-green-700 dark:text-green-500">
+                  WhatsApp will open with your message pre-filled. Pick your church group and tap Send.
+                </p>
                 <div className="space-y-1.5">
                   <Label className="text-xs">Override Phone Number (optional)</Label>
                   <Input
