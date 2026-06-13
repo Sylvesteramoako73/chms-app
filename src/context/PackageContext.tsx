@@ -158,7 +158,7 @@ const PackageContext = createContext<PackageContextValue | null>(null);
 export function PackageProvider({ children }: { children: ReactNode }) {
   const { isDemo, profile } = useAuth();
   const churchId = profile?.churchId ?? null;
-  const [plan, setPlan] = useState<Plan>('free');
+  const [plan, setPlan] = useState<Plan>('custom');
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
@@ -180,15 +180,15 @@ export function PackageProvider({ children }: { children: ReactNode }) {
       if (data?.plan) {
         setPlan(data.plan as Plan);
       } else {
-        // First time: no settings row yet — create one with default plan
+        // First time: no settings row yet — create one with full access
         await supabase
           .from('church_settings')
-          .insert({ church_id: churchId, plan: 'free' });
-        setPlan('free');
+          .insert({ church_id: churchId, plan: 'custom' });
+        setPlan('custom');
       }
     } catch (_) {
       // Table doesn't exist yet (fresh project before schema is applied)
-      setPlan('starter');
+      setPlan('custom');
     } finally {
       setLoading(false);
     }
