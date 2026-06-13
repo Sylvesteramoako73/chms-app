@@ -53,7 +53,7 @@ export default function PrayerRequests() {
       updatePrayerRequest({ ...editing, ...form, memberId: form.memberId || undefined });
       toast({ title: 'Request updated', description: `"${form.title}" has been updated.` });
     } else {
-      addPrayerRequest({ id: `pr${Date.now()}`, ...form, memberId: form.memberId || undefined, isAnswered: false, createdAt: format(new Date(), 'yyyy-MM-dd') });
+      addPrayerRequest({ id: crypto.randomUUID(), ...form, memberId: form.memberId || undefined, isAnswered: false, createdAt: format(new Date(), 'yyyy-MM-dd') });
       toast({ title: 'Request added', description: `"${form.title}" has been added to the prayer board.` });
     }
     setDialogOpen(false);

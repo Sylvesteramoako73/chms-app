@@ -98,7 +98,7 @@ export default function Members() {
       updateMember({ ...form, id: editing.id });
       toast({ title: 'Member updated', description: `${fullName} has been updated.` });
     } else {
-      addMember({ ...form, id: `m${Date.now()}` });
+      addMember({ ...form, id: crypto.randomUUID() });
       toast({ title: 'Member added', description: `${fullName} has been added to the congregation.` });
     }
     setDialogOpen(false);
@@ -118,10 +118,10 @@ export default function Members() {
       const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
       const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/\s+/g, ''));
       const idx = (key: string) => headers.indexOf(key);
-      const parsed: Member[] = lines.slice(1).map((line, i) => {
+      const parsed: Member[] = lines.slice(1).map((line) => {
         const cols = line.split(',').map(c => c.trim());
         return {
-          id: `imp${Date.now()}${i}`,
+          id: crypto.randomUUID(),
           firstName: cols[idx('firstname')] ?? '',
           lastName: cols[idx('lastname')] ?? '',
           phone: cols[idx('phone')] ?? '',

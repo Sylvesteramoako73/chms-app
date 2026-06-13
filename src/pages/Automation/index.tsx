@@ -17,7 +17,7 @@ import {
   Mail, MessageCircle, Smartphone, Gift, Calendar, Users, Zap, ToggleLeft, ToggleRight,
 } from 'lucide-react';
 import { cn } from '@/utils';
-import { openWhatsAppTo, sendWhatsAppViaServer } from '@/lib/whatsapp';
+import { sendWhatsAppViaServer } from '@/lib/whatsapp';
 
 // ── localStorage keys ──────────────────────────────────────────────────────────
 const TEMPLATES_KEY = 'chms_reminder_templates';
@@ -158,10 +158,9 @@ export default function Automation() {
           .replace('{churchName}', "Winners' Chapel");
         let sent = false;
         if (profile?.id) {
-          sent = await sendWhatsAppViaServer(profile.id, m.phone!, msg);
+          sent = await sendWhatsAppViaServer(profile.churchId ?? 'default', m.phone!, msg);
         }
-        if (!sent) openWhatsAppTo(m.phone!, msg);
-        else serverSent++;
+        if (sent) serverSent++;
         newLogs.push({ id: `log_${Date.now()}_${m.id}`, templateId: template.id, templateName: template.name, recipientName: `${m.firstName} ${m.lastName}`, recipientContact: m.phone, channel: 'WhatsApp', type: template.type, message: msg, sentAt: new Date().toISOString(), status: 'Sent' });
       }
 
@@ -169,7 +168,7 @@ export default function Automation() {
       if (serverSent > 0) {
         toast({ title: `WhatsApp sent to ${serverSent} recipient${serverSent !== 1 ? 's' : ''}`, description: 'Messages delivered automatically.' });
       } else {
-        toast({ title: `WhatsApp opened for ${targets.length} recipient${targets.length !== 1 ? 's' : ''}`, description: 'Tap Send in each WhatsApp chat.' });
+        toast({ title: 'WhatsApp not connected', description: 'Go to WhatsApp in the sidebar and scan the QR code first.', variant: 'destructive' });
       }
     } catch {
       toast({ title: 'Send failed', description: 'Could not open WhatsApp. Please try again.', variant: 'destructive' });

@@ -157,7 +157,7 @@ export default function Accounting() {
         await updateTransaction({ ...editingTx, ...txForm, amount: Number(txForm.amount) });
       } else {
         await addTransaction({
-          id: `tx${Date.now()}`,
+          id: crypto.randomUUID(),
           ...txForm,
           amount: Number(txForm.amount),
           createdBy: profile?.id ?? null,
@@ -209,7 +209,7 @@ export default function Accounting() {
       if (editingAc) {
         await updateAccount({ ...editingAc, ...acForm });
       } else {
-        await addAccount({ id: `ac${Date.now()}`, ...acForm, createdAt: new Date().toISOString() });
+        await addAccount({ id: crypto.randomUUID(), ...acForm, createdAt: new Date().toISOString() });
       }
       setAcDialogOpen(false);
       toast({ title: editingAc ? 'Account updated' : 'Account added' });
@@ -247,7 +247,7 @@ export default function Accounting() {
     const existing = filteredBudgets.find(b => b.accountId === accountId && b.year === budgetYear && b.month === null);
     try {
       await upsertBudget({
-        id: existing?.id ?? `bd${Date.now()}`,
+        id: existing?.id ?? crypto.randomUUID(),
         accountId,
         year: budgetYear,
         month: null,

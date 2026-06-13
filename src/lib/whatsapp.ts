@@ -8,24 +8,21 @@ function normalisePhone(raw: string): string {
   return n;
 }
 
-/** Opens WhatsApp to a specific contact with a pre-filled message (fallback). */
 export function openWhatsAppTo(phone: string, message: string): void {
   const n = normalisePhone(phone);
   window.open(`https://wa.me/${n}?text=${encodeURIComponent(message)}`, '_blank', 'noopener,noreferrer');
 }
 
-/** Opens WhatsApp with a pre-filled message but NO specific recipient (fallback). */
 export function openWhatsAppBroadcast(message: string): void {
   window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank', 'noopener,noreferrer');
 }
 
-/** Returns a wa.me URL for a specific contact. */
 export function waLink(phone: string, message: string): string {
   const n = normalisePhone(phone);
   return `https://wa.me/${n}?text=${encodeURIComponent(message)}`;
 }
 
-/** Send a single message via the WhatsApp server. Returns true on success. */
+/** Send a single WhatsApp message via the server. Returns true on success. */
 export async function sendWhatsAppViaServer(sessionId: string, phone: string, message: string): Promise<boolean> {
   try {
     const res = await fetch(`${API_BASE}/api/whatsapp/send`, {
@@ -39,19 +36,26 @@ export async function sendWhatsAppViaServer(sessionId: string, phone: string, me
   }
 }
 
-/** Send bulk messages via the WhatsApp server. Returns true on success. */
-export async function sendWhatsAppBulkViaServer(sessionId: string, numbers: string[], message: string): Promise<boolean> {
+/** Send bulk WhatsApp messages via the server. Returns null on success, error string on failure. */
+export async function sendWhatsAppBulkViaServer(sessionId: string, numbers: string[], message: string): Promise<string | null> {
   try {
     const normalised = numbers.map(normalisePhone).filter(n => n.length >= 10);
-    if (normalised.length === 0) return false;
+    if (normalised.length === 0) return 'No valid phone numbers to send to.';
     const res = await fetch(`${API_BASE}/api/whatsapp/send-bulk`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ sessionId, numbers: normalised, message }),
     });
-    return res.ok;
-  } catch {
-    return false;
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({})) as { error?: string };
+      const errMsg = body.error ?? `Server error ${res.status}`;
+      console.warn('[WA] send-bulk failed:', res.status, body);
+      return errMsg;
+    }
+    return null;
+  } catch (e) {
+    console.warn('[WA] send-bulk error:', e);
+    return 'Could not reach WhatsApp server.';
   }
 }
 

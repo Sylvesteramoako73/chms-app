@@ -1,5 +1,3 @@
-import { openWhatsAppBroadcast } from '@/lib/whatsapp';
-
 export function normaliseMsisdn(raw: string): string {
   let n = raw.replace(/\D/g, '');
   if (n.startsWith('00')) n = n.slice(2);
@@ -43,33 +41,26 @@ export async function sendSMS(
         schedule_date: '',
       }),
     });
-    const data = await response.json();
+    let data: Record<string, unknown> = {};
+    const raw = await response.text();
+    try { data = JSON.parse(raw); } catch { /* non-JSON response */ }
+    console.log('[SMS] mNotify response', response.status, data, raw);
     if (data.status === 'success' || data.code === 1000) {
       onToast({ title: 'SMS sent!', description: `${normalised.length} message${normalised.length !== 1 ? 's' : ''} delivered.` });
       return true;
     }
-    const hint = data.code === 1004 ? ' Check your API key in Settings.' : data.code === 1006 ? ' Top up your mNotify balance.' : '';
-    throw new Error((data.message ?? `mNotify error ${data.code}`) + hint);
+    if (!response.ok && !data.message && !data.code) {
+      throw new Error(`HTTP ${response.status} — ${raw.slice(0, 120)}`);
+    }
+    const code = data.code as number | undefined;
+    const hint = code === 1004 ? ' Check your API key in Settings.' : code === 1006 ? ' Top up your mNotify balance.' : '';
+    const msg = (data.message as string | undefined) ?? `mNotify error ${code ?? response.status}`;
+    throw new Error(msg + hint);
   } catch (err) {
-    onToast({ title: 'SMS failed', description: err instanceof Error ? err.message : 'Unknown error', variant: 'destructive' });
+    const desc = err instanceof Error ? err.message : String(err);
+    console.error('[SMS] failed:', desc);
+    onToast({ title: 'SMS failed', description: desc || 'Unknown error', variant: 'destructive' });
     return false;
   }
 }
 
-/**
- * Opens WhatsApp with the message pre-filled so the admin can choose
- * which contact or group to send to. No API key or setup required.
- */
-export function sendWhatsApp(
-  phones: string[],
-  text: string,
-  onToast: (t: { title: string; description?: string; variant?: 'destructive' }) => void,
-): boolean {
-  if (phones.length === 0) {
-    onToast({ title: 'No recipients', description: 'No phone numbers found for the selected group.', variant: 'destructive' });
-    return false;
-  }
-  openWhatsAppBroadcast(text);
-  onToast({ title: 'WhatsApp opened', description: 'Pick your church group in WhatsApp and tap Send.' });
-  return true;
-}

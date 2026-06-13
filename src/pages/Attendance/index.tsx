@@ -108,7 +108,7 @@ export default function Attendance() {
   const handleLog = () => {
     const isQuick = entryMode === 'quickcount';
     const record: AttendanceRecord = {
-      id: `a${Date.now()}`,
+      id: crypto.randomUUID(),
       serviceType: logService,
       date: logDate,
       campusId: logCampusId !== 'none' ? logCampusId : undefined,

@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { useData } from '@/context/DataContext';
 import { useAuth } from '@/context/AuthContext';
-import { openWhatsAppTo, sendWhatsAppViaServer } from '@/lib/whatsapp';
+import { sendWhatsAppViaServer } from '@/lib/whatsapp';
 import { format, getMonth, getDate } from 'date-fns';
 
 const SETTINGS_KEY = 'chms_birthday_wa';
@@ -41,9 +41,7 @@ export function useBirthdayWA() {
         });
         for (const m of targets) {
           const msg = `Happy Birthday, ${m.firstName}! 🎂 Wishing you a day filled with God's blessings and joy. With love, from your church family.`;
-          const ok = profile?.id ? await sendWhatsAppViaServer(profile.id, m.phone!, msg) : false;
-          if (!ok) openWhatsAppTo(m.phone!, msg);
-          sent++;
+          if (profile?.id && await sendWhatsAppViaServer(profile.churchId ?? 'default', m.phone!, msg)) sent++;
         }
       }
 
@@ -57,9 +55,7 @@ export function useBirthdayWA() {
         for (const m of targets) {
           const years = today.getFullYear() - new Date(m.joinDate).getFullYear();
           const msg = `Happy ${years}-year Church Anniversary, ${m.firstName}! 🎉 Thank you for being a faithful part of our congregation. God bless you abundantly!`;
-          const ok = profile?.id ? await sendWhatsAppViaServer(profile.id, m.phone!, msg) : false;
-          if (!ok) openWhatsAppTo(m.phone!, msg);
-          sent++;
+          if (profile?.id && await sendWhatsAppViaServer(profile.churchId ?? 'default', m.phone!, msg)) sent++;
         }
       }
 

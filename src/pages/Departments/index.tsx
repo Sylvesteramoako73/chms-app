@@ -36,7 +36,7 @@ export default function Departments() {
       updateDepartment({ ...editingDept, ...deptForm });
       toast({ title: 'Department updated', description: `${deptForm.name} has been updated.` });
     } else {
-      addDepartment({ id: `d${Date.now()}`, ...deptForm });
+      addDepartment({ id: crypto.randomUUID(), ...deptForm });
       toast({ title: 'Department added', description: `${deptForm.name} has been created.` });
     }
     setDeptDialog(false);
@@ -48,7 +48,7 @@ export default function Departments() {
       updateSmallGroup({ ...editingGroup, ...groupForm });
       toast({ title: 'Group updated', description: `${groupForm.name} has been updated.` });
     } else {
-      addSmallGroup({ id: `sg${Date.now()}`, ...groupForm });
+      addSmallGroup({ id: crypto.randomUUID(), ...groupForm });
       toast({ title: 'Group added', description: `${groupForm.name} has been created.` });
     }
     setGroupDialog(false);

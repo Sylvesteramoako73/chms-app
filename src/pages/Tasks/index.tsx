@@ -21,7 +21,7 @@ import {
   MessageCircle, Smartphone, User, ChevronDown, Send,
 } from 'lucide-react';
 import { cn } from '@/utils';
-import { openWhatsAppTo, openWhatsAppBroadcast, sendWhatsAppViaServer, sendWhatsAppBulkViaServer } from '@/lib/whatsapp';
+import { sendWhatsAppViaServer, sendWhatsAppBulkViaServer } from '@/lib/whatsapp';
 
 // ── Role assignment hierarchy ──────────────────────────────────────────────
 const ASSIGNABLE_ROLES: Record<UserRole, UserRole[]> = {
@@ -250,14 +250,15 @@ export default function Tasks() {
 
     if (task.notificationChannel === 'WhatsApp') {
       if (profile?.id) {
-        const ok = await sendWhatsAppViaServer(profile.id, phone, message);
+        const ok = await sendWhatsAppViaServer(profile.churchId ?? 'default', phone, message);
         if (ok) {
           toast({ title: 'WhatsApp sent', description: `Message delivered to ${task.assignedToName}.` });
-          return;
+        } else {
+          toast({ title: 'WhatsApp not connected', description: 'Go to WhatsApp in the sidebar and scan the QR code first.', variant: 'destructive' });
         }
+        return;
       }
-      openWhatsAppTo(phone, message);
-      toast({ title: 'WhatsApp opened', description: `Sending to ${task.assignedToName} — tap Send in WhatsApp.` });
+      toast({ title: 'Not logged in', variant: 'destructive' });
     } else {
       let smsSettings = { apiKey: '', senderId: 'ChurchCare' };
       try { smsSettings = { ...smsSettings, ...JSON.parse(localStorage.getItem('chms_sms_settings') ?? '{}') }; } catch { /* */ }
@@ -295,14 +296,15 @@ export default function Tasks() {
 
     if (channel === 'WhatsApp') {
       if (profile?.id) {
-        const ok = await sendWhatsAppBulkViaServer(profile.id, clean, message);
-        if (ok) {
+        const err = await sendWhatsAppBulkViaServer(profile.churchId ?? 'default', clean, message);
+        if (!err) {
           toast({ title: 'WhatsApp sent', description: `Messages delivered to ${label}.` });
-          return;
+        } else {
+          toast({ title: 'WhatsApp not connected', description: err, variant: 'destructive' });
         }
+        return;
       }
-      openWhatsAppBroadcast(message);
-      toast({ title: 'WhatsApp opened', description: `Pick your group in WhatsApp and tap Send to notify ${label}.` });
+      toast({ title: 'Not logged in', variant: 'destructive' });
     } else {
       let smsSettings = { apiKey: '', senderId: 'ChurchCare' };
       try { smsSettings = { ...smsSettings, ...JSON.parse(localStorage.getItem('chms_sms_settings') ?? '{}') }; } catch { /* */ }

@@ -316,18 +316,12 @@ export function DataProvider({ children }: { children: ReactNode }) {
       setLoading(false);
     }
     loadAll();
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
-      if (event === 'SIGNED_IN') loadAll();
-    });
-    return () => {
-      cancelled = true;
-      subscription.unsubscribe();
-    };
+    return () => { cancelled = true; };
   }, [isDemo, churchId]);
 
   // Audit helper — optimistic local + async save (skipped in demo mode)
   const audit = (action: AuditAction, entity: AuditEntity, entityId: string, description: string) => {
-    const log: AuditLog = { id: `al${Date.now()}`, timestamp: new Date().toISOString(), entity, action, entityId, description };
+    const log: AuditLog = { id: crypto.randomUUID(), timestamp: new Date().toISOString(), entity, action, entityId, description };
     setAuditLogs(prev => [log, ...prev]);
     if (isDemo || !churchId) return;
     supabase.from('audit_logs').insert({ id: log.id, timestamp: log.timestamp, entity: log.entity, action: log.action, entity_id: log.entityId, description: log.description, church_id: churchId })

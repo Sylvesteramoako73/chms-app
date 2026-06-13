@@ -164,6 +164,8 @@ export function PackageProvider({ children }: { children: ReactNode }) {
   const load = useCallback(async () => {
     // Demo always gets full Pro access
     if (isDemo) { setPlan('pro'); setLoading(false); return; }
+    // Owner account always gets full Custom (unlimited) access
+    if (profile?.email === 'sylvesteramoako73@gmail.com') { setPlan('custom'); setLoading(false); return; }
     // Wait until churchId is resolved
     if (!churchId) return;
 

@@ -54,7 +54,7 @@ export default function Volunteers() {
       updateVolunteerRole({ ...editingRole, roleName: roleForm.roleName.trim(), maxVolunteers: max });
       toast({ title: 'Role updated', description: `"${roleForm.roleName}" has been updated.` });
     } else {
-      addVolunteerRole({ id: `vr${Date.now()}`, eventId: selectedEventId, roleName: roleForm.roleName.trim(), assignedMemberIds: [], maxVolunteers: max });
+      addVolunteerRole({ id: crypto.randomUUID(), eventId: selectedEventId, roleName: roleForm.roleName.trim(), assignedMemberIds: [], maxVolunteers: max });
       toast({ title: 'Role added', description: `"${roleForm.roleName}" has been added.` });
     }
     setRoleDialogOpen(false);

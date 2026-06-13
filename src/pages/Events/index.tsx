@@ -12,7 +12,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { Plus, Calendar, MapPin, Clock, Users, Pencil, Trash2, RefreshCw, Bell, Send } from 'lucide-react';
-import { sendSMS, sendWhatsApp } from '@/lib/messaging';
+import { sendSMS } from '@/lib/messaging';
+import { sendWhatsAppBulkViaServer } from '@/lib/whatsapp';
+import { useAuth } from '@/context/AuthContext';
 import { format, parseISO, isAfter, subDays } from 'date-fns';
 
 const EMPTY_FORM: Omit<EventRecord, 'id'> = {
@@ -23,6 +25,7 @@ const EMPTY_FORM: Omit<EventRecord, 'id'> = {
 
 export default function Events() {
   const { events, departments, members, addEvent, updateEvent, deleteEvent } = useData();
+  const { profile } = useAuth();
   const { toast } = useToast();
 
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -67,7 +70,7 @@ export default function Events() {
       updateEvent({ ...form, id: editing.id });
       toast({ title: 'Event updated', description: `"${form.title}" has been updated.` });
     } else {
-      addEvent({ ...form, id: `e${Date.now()}` });
+      addEvent({ ...form, id: crypto.randomUUID() });
       toast({ title: 'Event created', description: `"${form.title}" has been added to the calendar.` });
     }
     setDialogOpen(false);
@@ -108,9 +111,14 @@ export default function Events() {
 
   const handleNotifyWA = async () => {
     setSending('wa');
-    sendWhatsApp(getRecipientPhones(), notifyMessage, ({ title, description, variant }) =>
-      toast({ title, description, variant })
-    );
+    const phones = getRecipientPhones();
+    if (phones.length === 0) {
+      toast({ title: 'No phone numbers', description: 'No recipients have a phone number.', variant: 'destructive' });
+      setSending(null); return;
+    }
+    const err = await sendWhatsAppBulkViaServer(profile?.churchId ?? 'default', phones, notifyMessage);
+    if (!err) toast({ title: 'WhatsApp sent!', description: `Delivered to ${phones.length} recipients.` });
+    else toast({ title: 'WhatsApp failed', description: err, variant: 'destructive' });
     setSending(null);
   };
 

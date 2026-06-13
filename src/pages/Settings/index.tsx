@@ -132,6 +132,15 @@ export default function Settings() {
     localStorage.setItem('chms_emailjs_settings', JSON.stringify(next));
   };
 
+  const [smsGivingReceipt, setSmsGivingReceipt] = useState<boolean>(() => {
+    try { return JSON.parse(localStorage.getItem('chms_sms_giving_receipt') ?? 'false'); }
+    catch { return false; }
+  });
+  const toggleSmsGivingReceipt = (val: boolean) => {
+    setSmsGivingReceipt(val);
+    localStorage.setItem('chms_sms_giving_receipt', JSON.stringify(val));
+  };
+
   const [birthdayWA, setBirthdayWA] = useState<{ birthdayEnabled: boolean; anniversaryEnabled: boolean }>(() => {
     try { return { birthdayEnabled: false, anniversaryEnabled: false, ...JSON.parse(localStorage.getItem('chms_birthday_wa') ?? '{}') }; }
     catch { return { birthdayEnabled: false, anniversaryEnabled: false }; }
@@ -170,7 +179,7 @@ export default function Settings() {
       updateCampus({ ...editingCampus, ...data });
       toast({ title: 'Branch updated' });
     } else {
-      addCampus({ id: `c${Date.now()}`, ...data });
+      addCampus({ id: crypto.randomUUID(), ...data });
       toast({ title: 'Branch added' });
     }
     setCampusDialogOpen(false);
@@ -421,6 +430,13 @@ export default function Settings() {
                   onChange={e => updateSmsSettings('senderId', e.target.value)}
                 />
                 <p className="text-xs text-muted-foreground">The name recipients see as the sender. Must be registered with mNotify.</p>
+              </div>
+              <div className="flex items-center justify-between p-3 rounded-lg bg-muted/30">
+                <div>
+                  <p className="text-sm font-medium">Auto SMS receipt on giving</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">Send an SMS confirmation to members when their tithe or offering is recorded.</p>
+                </div>
+                <Switch checked={smsGivingReceipt} onCheckedChange={toggleSmsGivingReceipt} />
               </div>
             </CardContent>
           </Card>
@@ -673,7 +689,7 @@ export default function Settings() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <WhatsAppConnect />
+              <WhatsAppConnect sessionId={profile?.churchId ?? 'default'} />
             </CardContent>
           </Card>
         </TabsContent>

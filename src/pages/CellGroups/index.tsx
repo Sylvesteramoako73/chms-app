@@ -104,7 +104,7 @@ export default function CellGroups() {
       updateCellGroup({ ...editingCell, ...cForm });
       toast({ title: 'Cell group updated' });
     } else {
-      addCellGroup({ id: `cg${Date.now()}`, ...cForm, createdAt: new Date().toISOString() });
+      addCellGroup({ id: crypto.randomUUID(), ...cForm, createdAt: new Date().toISOString() });
       toast({ title: 'Cell group created' });
     }
     setCellDialog(false);
@@ -117,7 +117,7 @@ export default function CellGroups() {
 
   const handleAssignMember = (memberId: string) => {
     if (!selectedCell) return;
-    assignMemberToCell({ id: `cm${Date.now()}`, cellId: selectedCell.id, memberId, role: 'Member', joinDate: format(new Date(), 'yyyy-MM-dd') });
+    assignMemberToCell({ id: crypto.randomUUID(), cellId: selectedCell.id, memberId, role: 'Member', joinDate: format(new Date(), 'yyyy-MM-dd') });
     toast({ title: 'Member added to cell' });
   };
 
@@ -130,7 +130,7 @@ export default function CellGroups() {
   const handleLogAttendance = () => {
     if (!selectedCell) return;
     addCellAttendance({
-      id: `ca${Date.now()}`, cellId: selectedCell.id, date: attForm.date,
+      id: crypto.randomUUID(), cellId: selectedCell.id, date: attForm.date,
       presentMemberIds: Array.from(attPresent),
       topicDiscussed: attForm.topicDiscussed || undefined,
       offerings: attForm.offerings ? parseFloat(attForm.offerings) : undefined,
@@ -146,7 +146,7 @@ export default function CellGroups() {
       toast({ title: 'Please fill all required fields', variant: 'destructive' }); return;
     }
     addCellReport({
-      id: `cr${Date.now()}`, cellId: selectedCell.id, date: rForm.date, reportedBy: rForm.reportedBy,
+      id: crypto.randomUUID(), cellId: selectedCell.id, date: rForm.date, reportedBy: rForm.reportedBy,
       attendance: parseInt(rForm.attendance) || 0, newVisitors: parseInt(rForm.newVisitors) || 0,
       conversions: parseInt(rForm.conversions) || 0, topicCovered: rForm.topicCovered,
       highlights: rForm.highlights || undefined, challenges: rForm.challenges || undefined,

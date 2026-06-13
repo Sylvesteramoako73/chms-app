@@ -99,7 +99,7 @@ export default function Workers() {
       updateWorker({ ...editing, ...form });
       toast({ title: 'Staff record updated' });
     } else {
-      addWorker({ id: `wk${Date.now()}`, ...form, createdAt: new Date().toISOString() });
+      addWorker({ id: crypto.randomUUID(), ...form, createdAt: new Date().toISOString() });
       toast({ title: 'Staff member added', description: `${form.firstName} ${form.lastName} has been registered.` });
     }
     setWorkerDialog(false);
@@ -118,7 +118,7 @@ export default function Workers() {
       updateWorkerSchedule({ ...editingSchedule, ...scheduleForm });
       toast({ title: 'Schedule updated' });
     } else {
-      addWorkerSchedule({ id: `ws${Date.now()}`, ...scheduleForm, status: 'Scheduled' });
+      addWorkerSchedule({ id: crypto.randomUUID(), ...scheduleForm, status: 'Scheduled' });
       toast({ title: 'Duty scheduled' });
     }
     setScheduleDialog(false);
@@ -127,7 +127,7 @@ export default function Workers() {
 
   const handleLogAttendance = () => {
     const records = workers.map(w => ({
-      id: `wa${Date.now()}_${w.id}`,
+      id: crypto.randomUUID(),
       workerId: w.id, date: attDate, serviceType: attService,
       present: presentIds.has(w.id),
     }));

@@ -85,7 +85,7 @@ export default function Pledges() {
       updateCampaign({ ...editingCampaign, ...data });
       toast({ title: 'Campaign updated' });
     } else {
-      addCampaign({ id: `camp${Date.now()}`, ...data });
+      addCampaign({ id: crypto.randomUUID(), ...data });
       toast({ title: 'Campaign created', description: `"${data.title}" is live.` });
     }
     setCampaignDialogOpen(false);
@@ -112,7 +112,7 @@ export default function Pledges() {
       updatePledge({ ...editingPledge, ...data });
       toast({ title: 'Pledge updated' });
     } else {
-      addPledge({ id: `pl${Date.now()}`, ...data, paidAmount: 0, pledgeDate: format(new Date(), 'yyyy-MM-dd') });
+      addPledge({ id: crypto.randomUUID(), ...data, paidAmount: 0, pledgeDate: format(new Date(), 'yyyy-MM-dd') });
       toast({ title: 'Pledge recorded', description: `₵${data.pledgeAmount.toLocaleString()} pledge added.` });
     }
     setPledgeDialogOpen(false);
@@ -131,7 +131,7 @@ export default function Pledges() {
       toast({ title: 'Invalid amount', variant: 'destructive' });
       return;
     }
-    recordPledgePayment({ id: `pp${Date.now()}`, pledgeId: paymentDialogPledge.id, amount, date: paymentForm.date, notes: paymentForm.notes.trim() || undefined });
+    recordPledgePayment({ id: crypto.randomUUID(), pledgeId: paymentDialogPledge.id, amount, date: paymentForm.date, notes: paymentForm.notes.trim() || undefined });
     toast({ title: 'Payment recorded', description: `₵${amount.toLocaleString()} recorded.` });
     setPaymentDialogPledge(null);
   };

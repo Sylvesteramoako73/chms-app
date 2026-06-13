@@ -14,7 +14,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { Send, Clock, Mail, MessageSquare, Megaphone, CheckCircle, Loader2, AlertCircle, Wifi } from 'lucide-react';
 import { format, subDays } from 'date-fns';
-import { openWhatsAppBroadcast, sendWhatsAppBulkViaServer } from '@/lib/whatsapp';
+import { sendWhatsAppBulkViaServer } from '@/lib/whatsapp';
 import { normaliseMsisdn } from '@/lib/messaging';
 
 // WhatsApp icon as inline SVG to avoid extra dependencies
@@ -222,17 +222,23 @@ export default function Communication() {
       toast({ title: 'No phone numbers', description: 'None of the selected recipients have a phone number.', variant: 'destructive' });
       return false;
     }
-    if (profile?.id) {
-      const normalised = phones.map(normaliseMsisdn).filter(n => n.length >= 10);
-      const ok = await sendWhatsAppBulkViaServer(profile.id, normalised, text);
-      if (ok) {
-        toast({ title: 'WhatsApp messages sent!', description: `Delivered to ${normalised.length} recipient${normalised.length !== 1 ? 's' : ''}.` });
-        return true;
-      }
+    if (!profile?.id) {
+      toast({ title: 'Not logged in', variant: 'destructive' });
+      return false;
     }
-    openWhatsAppBroadcast(text);
-    toast({ title: 'WhatsApp opened', description: 'Pick your church group in WhatsApp and tap Send.' });
-    return true;
+    const normalised = phones.map(normaliseMsisdn).filter(n => n.length >= 10);
+    if (normalised.length === 0) {
+      toast({ title: 'No valid phone numbers', description: 'Ensure recipients have valid Ghana phone numbers.', variant: 'destructive' });
+      return false;
+    }
+    const sessionId = profile.churchId ?? 'default';
+    const err = await sendWhatsAppBulkViaServer(sessionId, normalised, text);
+    if (!err) {
+      toast({ title: 'WhatsApp messages sent!', description: `Delivered to ${normalised.length} recipient${normalised.length !== 1 ? 's' : ''}.` });
+      return true;
+    }
+    toast({ title: 'WhatsApp send failed', description: `${err} (session: ${sessionId.slice(0, 8)}…)`, variant: 'destructive' });
+    return false;
   };
 
   const handleSend = async (msgStatus: 'Sent' | 'Scheduled' | 'Draft') => {

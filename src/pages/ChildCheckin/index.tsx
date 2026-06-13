@@ -99,7 +99,7 @@ export default function ChildCheckin() {
       updateGuardian({ ...editingGuardian, ...guardianForm });
       toast({ title: 'Guardian updated' });
     } else {
-      addGuardian({ id: `gd${Date.now()}`, ...guardianForm, childIds: [], securityCode: generateCode() });
+      addGuardian({ id: crypto.randomUUID(), ...guardianForm, childIds: [], securityCode: generateCode() });
       toast({ title: 'Guardian registered', description: 'Security code auto-generated.' });
     }
     setGuardianDialog(false);
@@ -126,7 +126,7 @@ export default function ChildCheckin() {
     }
     const alreadyIn = todayCheckIns.find(c => c.childId === selectedChild.id && c.status === 'Checked In');
     if (alreadyIn) { toast({ title: 'Already checked in', description: `${selectedChild.firstName} is already checked in today.` }); return; }
-    checkInChild({ id: `ci${Date.now()}`, childId: selectedChild.id, guardianId: selectedGuardian.id, checkInTime: new Date().toISOString(), date: today, checkInBy: 'Staff', status: 'Checked In' });
+    checkInChild({ id: crypto.randomUUID(), childId: selectedChild.id, guardianId: selectedGuardian.id, checkInTime: new Date().toISOString(), date: today, checkInBy: 'Staff', status: 'Checked In' });
     toast({ title: `${selectedChild.firstName} checked in!`, description: `Checked in by ${selectedGuardian.firstName} ${selectedGuardian.lastName}` });
     setCheckInDialog(false);
   };

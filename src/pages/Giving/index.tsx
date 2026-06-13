@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { useData } from '@/context/DataContext';
 import { useCampus } from '@/context/CampusContext';
+import { sendSMS } from '@/lib/messaging';
 import type { GivingRecord, GivingType, PaymentMethod, Member } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -105,7 +106,7 @@ export default function Giving() {
       return;
     }
     addGiving({
-      id: `g${Date.now()}`,
+      id: crypto.randomUUID(),
       memberId: form.memberId || undefined,
       date: form.date,
       amount: amt,
@@ -115,6 +116,18 @@ export default function Giving() {
       notes: form.notes || undefined,
     });
     toast({ title: 'Offering recorded', description: `₵${amt.toLocaleString()} ${form.type} has been logged.` });
+
+    // Auto SMS receipt if enabled and member has a phone
+    const smsReceiptEnabled = (() => { try { return JSON.parse(localStorage.getItem('chms_sms_giving_receipt') ?? 'false'); } catch { return false; } })();
+    if (smsReceiptEnabled && form.memberId) {
+      const member = members.find(m => m.id === form.memberId);
+      if (member?.phone) {
+        const churchName = (() => { try { return JSON.parse(localStorage.getItem('chms_church_name') ?? '"Your Church"'); } catch { return 'Your Church'; } })();
+        const msg = `Dear ${member.firstName}, your ${form.type} of GHS ${amt.toLocaleString()} on ${form.date} has been received. Thank you for your faithfulness. God bless you! — ${churchName}`;
+        sendSMS([member.phone], msg, ({ title, description, variant }) => toast({ title, description, variant }));
+      }
+    }
+
     setDialogOpen(false);
     setForm(EMPTY_FORM);
   };

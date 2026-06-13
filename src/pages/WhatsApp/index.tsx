@@ -7,6 +7,9 @@ import { useAuth } from '@/context/AuthContext';
 export default function WhatsAppPage() {
   const { profile } = useAuth();
 
+  if (!profile) return null;
+  const sessionId = profile.churchId ?? 'default';
+
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-6 max-w-2xl">
       <div>
@@ -24,7 +27,7 @@ export default function WhatsAppPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <WhatsAppConnect sessionId={profile?.id ?? 'default'} />
+          <WhatsAppConnect sessionId={sessionId} />
         </CardContent>
       </Card>
     </motion.div>
