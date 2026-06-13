@@ -35,6 +35,8 @@ export default function Reports() {
   const [selectedBranch, setSelectedBranch] = useState<string>('all');
 
   // Export dialog
+  const churchName = localStorage.getItem('chms_church_name') || 'Your Church';
+
   const [exportOpen, setExportOpen] = useState(false);
   const [exportType, setExportType] = useState<'annual' | 'monthly' | 'period'>('annual');
   const [dlYear, setDlYear] = useState(currentYear);
@@ -175,7 +177,7 @@ export default function Reports() {
         doc.setFillColor(255, 255, 255); doc.roundedRect(M - 2, 3, 22, 22, 1, 1, 'F');
         doc.addImage(logoDataUrl, 'PNG', M - 1, 4, 20, 20);
         doc.setTextColor(201, 168, 76); doc.setFontSize(13); doc.setFont('helvetica', 'bold');
-        doc.text('Faith ChurchCare', M + 24, 12);
+        doc.text(churchName, M + 24, 12);
         doc.setFontSize(8); doc.setFont('helvetica', 'normal');
         doc.setTextColor(180, 190, 210); doc.text('Reports & Analytics', M + 24, 19);
         doc.setTextColor(120, 130, 150);
@@ -317,11 +319,11 @@ export default function Reports() {
         doc.setPage(p);
         const ph = doc.internal.pageSize.getHeight();
         doc.setFontSize(7); doc.setTextColor(160, 170, 185);
-        doc.text('Faith ChurchCare — Confidential', M, ph - 6);
+        doc.text(`${churchName} — Confidential`, M, ph - 6);
         doc.text(`Page ${p} of ${totalPages}`, W - M, ph - 6, { align: 'right' });
       }
 
-      const filename = `FaithChurchCare_${periodLabel.replace(/[^a-zA-Z0-9]/g, '_')}_${activeBranchName.replace(/\s/g, '_')}.pdf`;
+      const filename = `${churchName.replace(/\s/g, '_')}_${periodLabel.replace(/[^a-zA-Z0-9]/g, '_')}_${activeBranchName.replace(/\s/g, '_')}.pdf`;
       doc.save(filename);
       toast({ title: 'Report downloaded', description: filename });
     } catch (err) {
@@ -349,9 +351,9 @@ export default function Reports() {
     if (!actions.canExportReports) {
       toast({ title: 'Access denied', description: 'Your role cannot share reports.', variant: 'destructive' }); return;
     }
-    const text = `ChurchCare Report (${format(rangeStart, 'MMM d')} – ${format(rangeEnd, 'MMM d, yyyy')})\n\nNew Members: ${newMembersInRange.length}\nTotal Giving: ${GHS}${totalGiving.toLocaleString()}\nServices Held: ${rangeAttendance.length}\nAvg Attendance: ${avgAttendance}`;
+    const text = `${churchName} Report (${format(rangeStart, 'MMM d')} – ${format(rangeEnd, 'MMM d, yyyy')})\n\nNew Members: ${newMembersInRange.length}\nTotal Giving: ${GHS}${totalGiving.toLocaleString()}\nServices Held: ${rangeAttendance.length}\nAvg Attendance: ${avgAttendance}`;
     if (navigator.share) {
-      await navigator.share({ title: 'ChurchCare Report', text }).catch(() => {});
+      await navigator.share({ title: `${churchName} Report`, text }).catch(() => {});
     } else {
       await navigator.clipboard.writeText(text);
       toast({ title: 'Copied to clipboard', description: 'Report summary copied. Paste into any app.' });
@@ -426,7 +428,7 @@ export default function Reports() {
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(11);
         doc.setTextColor(201, 168, 76);
-        doc.text('Faith ChurchCare', M + 22, 12);
+        doc.text(churchName, M + 22, 12);
         doc.setFontSize(8);
         doc.setFont('helvetica', 'normal');
         doc.setTextColor(160, 170, 190);
@@ -659,11 +661,11 @@ export default function Reports() {
         const ph = doc.internal.pageSize.getHeight();
         doc.setFontSize(7);
         doc.setTextColor(160, 170, 185);
-        doc.text('ChurchCare — Confidential Annual Report', M, ph - 6);
+        doc.text(`${churchName} — Confidential Annual Report`, M, ph - 6);
         doc.text(`Page ${p - 1} of ${totalPages - 1}`, W - M, ph - 6, { align: 'right' });
       }
 
-      doc.save(`FaithChurchCare_Annual_Report_${year}_${activeBranchName.replace(/\s/g, '_')}.pdf`);
+      doc.save(`${churchName.replace(/\s/g, '_')}_Annual_Report_${year}_${activeBranchName.replace(/\s/g, '_')}.pdf`);
       toast({ title: 'Annual Report generated', description: `Annual Report ${year} downloaded.` });
     } catch (err) {
       console.error(err);

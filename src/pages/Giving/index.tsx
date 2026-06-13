@@ -122,7 +122,7 @@ export default function Giving() {
     if (smsReceiptEnabled && form.memberId) {
       const member = members.find(m => m.id === form.memberId);
       if (member?.phone) {
-        const churchName = (() => { try { return JSON.parse(localStorage.getItem('chms_church_name') ?? '"Your Church"'); } catch { return 'Your Church'; } })();
+        const churchName = getChurchName();
         const msg = `Dear ${member.firstName}, your ${form.type} of GHS ${amt.toLocaleString()} on ${form.date} has been received. Thank you for your faithfulness. God bless you! — ${churchName}`;
         sendSMS([member.phone], msg, ({ title, description, variant }) => toast({ title, description, variant }));
       }
@@ -136,6 +136,8 @@ export default function Giving() {
     deleteGiving(record.id);
     toast({ title: 'Record deleted', description: 'The giving record has been removed.' });
   };
+
+  const getChurchName = () => localStorage.getItem('chms_church_name') || 'Your Church';
 
   const generateReceipt = (record: GivingRecord) => {
     const member = members.find(m => m.id === record.memberId);
@@ -151,7 +153,7 @@ export default function Giving() {
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(22);
     doc.setTextColor(201, 168, 76);
-    doc.text('ChurchCare', W / 2, 18, { align: 'center' });
+    doc.text(getChurchName(), W / 2, 18, { align: 'center' });
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(180, 180, 180);
@@ -224,7 +226,7 @@ export default function Giving() {
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(22);
     doc.setTextColor(201, 168, 76);
-    doc.text('ChurchCare', W / 2, 18, { align: 'center' });
+    doc.text(getChurchName(), W / 2, 18, { align: 'center' });
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(180, 180, 180);

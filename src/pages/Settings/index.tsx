@@ -152,14 +152,20 @@ export default function Settings() {
     localStorage.setItem('chms_birthday_wa', JSON.stringify(next));
   };
 
-  const [churchName, setChurchName] = useState('Grace Cathedral');
-  const [denomination, setDenomination] = useState('Non-Denominational');
-  const [email, setEmail] = useState('info@grace.org');
-  const [phone, setPhone] = useState('+1 (555) 123-4567');
-  const [address, setAddress] = useState('123 Faith Avenue, Cityville, ST 12345');
-  const [founded, setFounded] = useState('1985');
+  const [churchName, setChurchName] = useState(() => localStorage.getItem('chms_church_name') ?? '');
+  const [denomination, setDenomination] = useState(() => localStorage.getItem('chms_denomination') ?? '');
+  const [email, setEmail] = useState(() => localStorage.getItem('chms_church_email') ?? '');
+  const [phone, setPhone] = useState(() => localStorage.getItem('chms_church_phone') ?? '');
+  const [address, setAddress] = useState(() => localStorage.getItem('chms_church_address') ?? '');
+  const [founded, setFounded] = useState(() => localStorage.getItem('chms_church_founded') ?? '');
 
   const handleSaveProfile = () => {
+    localStorage.setItem('chms_church_name', churchName);
+    localStorage.setItem('chms_denomination', denomination);
+    localStorage.setItem('chms_church_email', email);
+    localStorage.setItem('chms_church_phone', phone);
+    localStorage.setItem('chms_church_address', address);
+    localStorage.setItem('chms_church_founded', founded);
     toast({ title: 'Profile saved', description: 'Church profile has been updated successfully.' });
   };
 
