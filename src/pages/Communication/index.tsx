@@ -167,7 +167,7 @@ export default function Communication() {
       return false;
     }
 
-    const churchName = JSON.parse(localStorage.getItem('chms_church_name') ?? '"ChurchCare"');
+    const churchName = localStorage.getItem('chms_church_name') || 'Your Church';
 
     // Build list of { name, email } targets
     type EmailTarget = { name: string; email: string };
