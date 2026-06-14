@@ -70,7 +70,7 @@ export default function Members() {
 
   const openAdd = () => {
     setEditing(null);
-    setForm(EMPTY_FORM);
+    setForm({ ...EMPTY_FORM, campusId: selectedCampusId !== 'all' ? selectedCampusId : undefined });
     setDialogOpen(true);
   };
 
