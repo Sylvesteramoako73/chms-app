@@ -299,7 +299,7 @@ export default function Giving() {
           <h1 className="text-4xl font-display font-bold text-navy-900 dark:text-cream mb-1">Tithes & Offerings</h1>
           <p className="text-sm text-muted-foreground">{giving.length} total records</p>
         </div>
-        <Button size="sm" onClick={() => setDialogOpen(true)} className="gap-2 bg-white hover:bg-gray-50 text-navy-900 font-medium">
+        <Button size="sm" onClick={() => { setForm({ ...EMPTY_FORM, campusId: selectedCampusId !== 'all' ? selectedCampusId : undefined } as any); setDialogOpen(true); }} className="gap-2 bg-white hover:bg-gray-50 text-navy-900 font-medium">
           <Plus className="w-4 h-4" /> Log Contribution
         </Button>
       </div>
