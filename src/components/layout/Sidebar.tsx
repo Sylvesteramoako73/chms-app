@@ -128,9 +128,8 @@ function SidebarContent({ onClose }: { onClose: () => void }) {
         </button>
       </div>
 
-      {/* Branch switcher — visible when 2+ branches exist */}
-      {campuses.length > 1 && (
-        <div className="px-4 pb-3">
+      {/* Branch switcher — always visible so users can reset to All Branches */}
+      <div className="px-4 pb-3">
           <div className="relative">
             <Building2 className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-navy-500 pointer-events-none" />
             {isLocked ? (
@@ -154,8 +153,7 @@ function SidebarContent({ onClose }: { onClose: () => void }) {
               </>
             )}
           </div>
-        </div>
-      )}
+      </div>
 
       {/* Nav */}
       <nav className="flex-1 px-4 overflow-y-auto space-y-4 pb-2">
