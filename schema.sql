@@ -126,6 +126,7 @@ CREATE POLICY "church_isolation" ON small_groups
 CREATE TABLE IF NOT EXISTS members (
   id             UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   church_id      UUID NOT NULL,
+  member_number  TEXT,
   first_name     TEXT NOT NULL,
   last_name      TEXT NOT NULL,
   phone          TEXT,

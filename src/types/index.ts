@@ -38,6 +38,7 @@ export interface Campus {
 
 export interface Member {
   id: string;
+  memberNumber?: string;
   firstName: string;
   lastName: string;
   phone: string;

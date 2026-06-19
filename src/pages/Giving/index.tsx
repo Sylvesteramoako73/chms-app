@@ -171,7 +171,7 @@ export default function Giving() {
 
     // Detail rows
     const rows: [string, string][] = [
-      ['Member', memberName],
+      ['Member', member?.memberNumber ? `${memberName} (${member.memberNumber})` : memberName],
       ['Date', format(parseISO(record.date), 'MMMM d, yyyy')],
       ['Giving Type', record.type],
       ['Payment Method', record.paymentMethod],
@@ -236,7 +236,7 @@ export default function Giving() {
     doc.setTextColor(11, 17, 32);
     doc.setFontSize(13);
     doc.setFont('helvetica', 'bold');
-    doc.text(memberName, 14, 58);
+    doc.text(member?.memberNumber ? `${memberName} (${member.memberNumber})` : memberName, 14, 58);
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(120, 120, 120);
@@ -582,7 +582,7 @@ export default function Giving() {
                 <SelectTrigger><SelectValue placeholder="Select member (optional)" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="anonymous">Anonymous</SelectItem>
-                  {memberOptions.map(m => <SelectItem key={m.id} value={m.id}>{m.firstName} {m.lastName}</SelectItem>)}
+                  {memberOptions.map(m => <SelectItem key={m.id} value={m.id}>{m.firstName} {m.lastName}{m.memberNumber ? ` (${m.memberNumber})` : ''}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>

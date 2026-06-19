@@ -89,6 +89,9 @@ export default function MemberProfile() {
             <div className="flex-1 min-w-0">
               <div className="flex flex-wrap items-center gap-2 mb-2">
                 <h1 className="text-3xl font-display font-bold text-navy-900 dark:text-cream">{member.firstName} {member.lastName}</h1>
+                {member.memberNumber && (
+                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-semibold border bg-navy-500/10 text-navy-700 dark:text-navy-300 border-navy-200 dark:border-navy-800/50">{member.memberNumber}</span>
+                )}
                 <span className={`inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-semibold border ${STATUS_COLORS[member.status]}`}>{member.status}</span>
                 {absenceStreak >= 3 && (
                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-semibold border bg-red-500/10 text-red-600 dark:text-red-400 border-red-200 dark:border-red-800/50">

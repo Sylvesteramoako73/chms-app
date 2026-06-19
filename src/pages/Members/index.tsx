@@ -98,8 +98,11 @@ export default function Members() {
       updateMember({ ...form, id: editing.id });
       toast({ title: 'Member updated', description: `${fullName} has been updated.` });
     } else {
-      addMember({ ...form, id: crypto.randomUUID() });
-      toast({ title: 'Member added', description: `${fullName} has been added to the congregation.` });
+      const existingNumbers = members.map(m => Number(m.memberNumber?.match(/(\d+)$/)?.[1])).filter(n => !isNaN(n));
+      const nextNumber = (existingNumbers.length ? Math.max(...existingNumbers) : 0) + 1;
+      const memberNumber = `MEM-${String(nextNumber).padStart(4, '0')}`;
+      addMember({ ...form, id: crypto.randomUUID(), memberNumber });
+      toast({ title: 'Member added', description: `${fullName} has been added as ${memberNumber}.` });
     }
     setDialogOpen(false);
   };
@@ -118,10 +121,13 @@ export default function Members() {
       const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
       const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/\s+/g, ''));
       const idx = (key: string) => headers.indexOf(key);
+      const existingNumbers = members.map(m => Number(m.memberNumber?.match(/(\d+)$/)?.[1])).filter(n => !isNaN(n));
+      let nextNumber = (existingNumbers.length ? Math.max(...existingNumbers) : 0) + 1;
       const parsed: Member[] = lines.slice(1).map((line) => {
         const cols = line.split(',').map(c => c.trim());
         return {
           id: crypto.randomUUID(),
+          memberNumber: `MEM-${String(nextNumber++).padStart(4, '0')}`,
           firstName: cols[idx('firstname')] ?? '',
           lastName: cols[idx('lastname')] ?? '',
           phone: cols[idx('phone')] ?? '',
@@ -264,6 +270,11 @@ export default function Members() {
                         <div className="min-w-0">
                           <div className="flex items-center gap-2">
                             <p className="font-medium text-sm truncate">{member.firstName} {member.lastName}</p>
+                            {member.memberNumber && (
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-navy-500/10 text-navy-700 dark:text-navy-300 border border-navy-200 dark:border-navy-800/50 shrink-0">
+                                {member.memberNumber}
+                              </span>
+                            )}
                             {absenceStreak >= 3 && (
                               <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-800/50 shrink-0">
                                 <AlertTriangle className="w-2.5 h-2.5" />{absenceStreak}w

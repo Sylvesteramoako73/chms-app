@@ -10,7 +10,7 @@ import { useAuth } from './AuthContext';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const mapMember = (r: any): Member => ({
-  id: r.id, firstName: r.first_name, lastName: r.last_name,
+  id: r.id, memberNumber: r.member_number ?? undefined, firstName: r.first_name, lastName: r.last_name,
   phone: r.phone ?? '', email: r.email ?? '', address: r.address ?? '',
   dateOfBirth: r.date_of_birth ?? undefined, gender: r.gender,
   maritalStatus: r.marital_status, occupation: r.occupation ?? undefined,
@@ -19,7 +19,7 @@ const mapMember = (r: any): Member => ({
   baptismDate: r.baptism_date ?? undefined, notes: r.notes ?? undefined,
 });
 const toMemberRow = (m: Member) => ({
-  id: m.id, first_name: m.firstName, last_name: m.lastName,
+  id: m.id, member_number: m.memberNumber ?? null, first_name: m.firstName, last_name: m.lastName,
   phone: m.phone, email: m.email, address: m.address,
   date_of_birth: m.dateOfBirth ?? null, gender: m.gender,
   marital_status: m.maritalStatus, occupation: m.occupation ?? null,
