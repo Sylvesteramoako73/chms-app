@@ -62,13 +62,14 @@ export default function MemberProfile() {
     .slice(0, 12);
 
   const handlePrintReceipt = () => {
+    const churchName = localStorage.getItem('chms_church_name') || 'Your Church';
     const year = new Date().getFullYear();
     const records = memberGiving.filter(g => new Date(g.date).getFullYear() === year);
     const total = records.reduce((s, g) => s + g.amount, 0);
     const byType = records.reduce<Record<string, number>>((acc, g) => { acc[g.type] = (acc[g.type] ?? 0) + g.amount; return acc; }, {});
-    const rows = records.map(g => `<tr><td>${format(new Date(g.date), 'MMM d, yyyy')}</td><td>${g.type}</td><td>${g.paymentMethod}</td><td style="text-align:right">$${g.amount.toLocaleString()}</td></tr>`).join('');
-    const summary = Object.entries(byType).map(([t, a]) => `<tr><td colspan="3">${t}</td><td style="text-align:right">$${a.toLocaleString()}</td></tr>`).join('');
-    const html = `<!DOCTYPE html><html><head><title>Giving Statement ${year}</title><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:Georgia,serif;color:#111;padding:40px;max-width:700px;margin:auto}h1{font-size:24px;color:#0B1120;margin-bottom:4px}h2{font-size:18px;color:#444;margin-bottom:20px}.info{margin-bottom:24px;line-height:2}table{width:100%;border-collapse:collapse;margin-top:16px}th{background:#f3f4f6;padding:10px 12px;text-align:left;font-size:13px;border-bottom:2px solid #e5e7eb}td{padding:9px 12px;font-size:13px;border-bottom:1px solid #e5e7eb}.total-row td{font-weight:bold;border-top:2px solid #0B1120;background:#f9fafb}.footer{margin-top:32px;font-size:11px;color:#888;text-align:center}</style></head><body><h1>Grace Cathedral</h1><h2>Annual Giving Statement — ${year}</h2><div class="info"><p><strong>Member:</strong> ${member.firstName} ${member.lastName}</p><p><strong>Email:</strong> ${member.email}</p><p><strong>Date Issued:</strong> ${format(new Date(), 'MMMM d, yyyy')}</p></div><table><thead><tr><th>Date</th><th>Type</th><th>Payment Method</th><th style="text-align:right">Amount</th></tr></thead><tbody>${rows || '<tr><td colspan="4" style="text-align:center;color:#888">No contributions this year.</td></tr>'}</tbody></table>${summary ? `<br/><table><thead><tr><th colspan="3">Summary by Type</th><th style="text-align:right">Total</th></tr></thead><tbody>${summary}</tbody><tfoot><tr class="total-row"><td colspan="3">Grand Total</td><td style="text-align:right">$${total.toLocaleString()}</td></tr></tfoot></table>` : ''}<p class="footer">This statement is for your personal records. Thank you for your faithful giving to Grace Cathedral.</p></body></html>`;
+    const rows = records.map(g => `<tr><td>${format(new Date(g.date), 'MMM d, yyyy')}</td><td>${g.type}</td><td>${g.paymentMethod}</td><td style="text-align:right">GHS ${g.amount.toLocaleString()}</td></tr>`).join('');
+    const summary = Object.entries(byType).map(([t, a]) => `<tr><td colspan="3">${t}</td><td style="text-align:right">GHS ${a.toLocaleString()}</td></tr>`).join('');
+    const html = `<!DOCTYPE html><html><head><title>Giving Statement ${year}</title><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:Georgia,serif;color:#111;padding:40px;max-width:700px;margin:auto}h1{font-size:24px;color:#0B1120;margin-bottom:4px}h2{font-size:18px;color:#444;margin-bottom:20px}.info{margin-bottom:24px;line-height:2}table{width:100%;border-collapse:collapse;margin-top:16px}th{background:#f3f4f6;padding:10px 12px;text-align:left;font-size:13px;border-bottom:2px solid #e5e7eb}td{padding:9px 12px;font-size:13px;border-bottom:1px solid #e5e7eb}.total-row td{font-weight:bold;border-top:2px solid #0B1120;background:#f9fafb}.footer{margin-top:32px;font-size:11px;color:#888;text-align:center}</style></head><body><h1>${churchName}</h1><h2>Annual Giving Statement — ${year}</h2><div class="info"><p><strong>Member:</strong> ${member.firstName} ${member.lastName}${member.memberNumber ? ` (${member.memberNumber})` : ''}</p><p><strong>Email:</strong> ${member.email}</p><p><strong>Date Issued:</strong> ${format(new Date(), 'MMMM d, yyyy')}</p></div><table><thead><tr><th>Date</th><th>Type</th><th>Payment Method</th><th style="text-align:right">Amount</th></tr></thead><tbody>${rows || '<tr><td colspan="4" style="text-align:center;color:#888">No contributions this year.</td></tr>'}</tbody></table>${summary ? `<br/><table><thead><tr><th colspan="3">Summary by Type</th><th style="text-align:right">Total</th></tr></thead><tbody>${summary}</tbody><tfoot><tr class="total-row"><td colspan="3">Grand Total</td><td style="text-align:right">GHS ${total.toLocaleString()}</td></tr></tfoot></table>` : ''}<p class="footer">This statement is for your personal records. Thank you for your faithful giving to ${churchName}.</p></body></html>`;
     const w = window.open('', '_blank');
     if (w) { w.document.write(html); w.document.close(); w.print(); }
   };
@@ -133,7 +134,7 @@ export default function MemberProfile() {
       {/* Quick stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { label: 'Total Giving', value: `$${totalGiving.toLocaleString()}`, sub: `$${thisYearTotal.toLocaleString()} this year`, icon: Coins, color: 'text-gold-500' },
+          { label: 'Total Giving', value: `₵${totalGiving.toLocaleString()}`, sub: `₵${thisYearTotal.toLocaleString()} this year`, icon: Coins, color: 'text-gold-500' },
           { label: 'Attendance Rate', value: `${attendanceRate}%`, sub: 'Sunday services', icon: CalendarCheck, color: 'text-sage-500' },
           { label: 'Years as Member', value: yearsAsMember > 0 ? `${yearsAsMember}yr` : '<1yr', sub: format(parseISO(member.joinDate), 'MMM d, yyyy'), icon: TrendingUp, color: 'text-navy-500 dark:text-navy-300' },
           { label: 'Prayer Requests', value: memberPrayers.length, sub: `${memberPrayers.filter(r => r.isAnswered).length} answered`, icon: Heart, color: 'text-purple-500' },
@@ -215,7 +216,7 @@ export default function MemberProfile() {
                       <TableCell className="pl-6 text-sm">{format(new Date(g.date), 'MMM d, yyyy')}</TableCell>
                       <TableCell className="text-sm">{g.type}</TableCell>
                       <TableCell className="hidden sm:table-cell text-sm text-muted-foreground">{g.paymentMethod}</TableCell>
-                      <TableCell className="text-right pr-6 font-bold text-gold-600 dark:text-gold-400">${g.amount.toLocaleString()}</TableCell>
+                      <TableCell className="text-right pr-6 font-bold text-gold-600 dark:text-gold-400">₵{g.amount.toLocaleString()}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
