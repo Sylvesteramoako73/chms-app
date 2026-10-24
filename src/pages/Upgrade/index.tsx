@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { usePaystackPayment } from 'react-paystack';
+import { openPaystack } from '@/lib/paystack';
 import { useAuth } from '@/context/AuthContext';
 import { usePackage, PLAN_LABELS, type Plan } from '@/context/PackageContext';
 import { Button } from '@/components/ui/button';
@@ -208,25 +208,6 @@ export default function Upgrade() {
   const totalGHS = isCustomSelected ? 0 : periodPriceGHS(selected, period);
   const amount = totalGHS * 100;
 
-  const initializePayment = usePaystackPayment({
-    reference: `chms-${Date.now()}`,
-    email: profile?.email ?? '',
-    amount,
-    currency: 'GHS',
-    publicKey: PAYSTACK_KEY,
-    metadata: {
-      plan: selected,
-      months: period.months,
-      church_id: profile?.churchId ?? '',
-      source: 'app',
-      custom_fields: [
-        { display_name: 'Church Plan', variable_name: 'plan', value: selected },
-        { display_name: 'Billing period', variable_name: 'billing_period', value: period.label },
-        { display_name: 'Church ID', variable_name: 'church_id', value: profile?.churchId ?? '' },
-      ],
-    },
-  });
-
   const handlePay = () => {
     if (isCustomSelected) {
       window.location.href = 'mailto:support@faithchurchcare.com?subject=Custom%20Plan%20Enquiry';
@@ -238,8 +219,24 @@ export default function Upgrade() {
     }
     setPaying(true);
     setPayError('');
-    initializePayment({
-      onSuccess: async (response: { reference: string }) => {
+    openPaystack({
+      key: PAYSTACK_KEY,
+      email: profile?.email ?? '',
+      amount,
+      currency: 'GHS',
+      ref: `chms-${selected}-${period.months}m-${Date.now()}`,
+      metadata: {
+        plan: selected,
+        months: period.months,
+        church_id: profile?.churchId ?? '',
+        source: 'app',
+        custom_fields: [
+          { display_name: 'Church Plan', variable_name: 'plan', value: selected },
+          { display_name: 'Billing period', variable_name: 'billing_period', value: period.label },
+          { display_name: 'Church ID', variable_name: 'church_id', value: profile?.churchId ?? '' },
+        ],
+      },
+      callback: async response => {
         // The server checks the payment with Paystack before upgrading the church
         const { error } = await confirmPayment(response.reference);
         setPaying(false);
@@ -250,6 +247,9 @@ export default function Upgrade() {
         setSuccess({ reference: response.reference, plan: selected as Plan, amount: totalGHS });
       },
       onClose: () => setPaying(false),
+    }).catch(err => {
+      setPaying(false);
+      setPayError(err instanceof Error ? err.message : 'Could not open Paystack.');
     });
   };
 
