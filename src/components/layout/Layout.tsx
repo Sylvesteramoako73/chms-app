@@ -6,7 +6,8 @@ import { Toaster } from '@/components/ui/toaster';
 import { useData } from '@/context/DataContext';
 import { useRole } from '@/context/RoleContext';
 import { useAuth } from '@/context/AuthContext';
-import { Menu, Moon, Sun, ShieldOff, Bell, X, Trash2, PlayCircle } from 'lucide-react';
+import { usePackage } from '@/context/PackageContext';
+import { Menu, Moon, Sun, ShieldOff, Bell, X, Trash2, PlayCircle, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { format, parseISO } from 'date-fns';
 import { cn } from '@/utils';
@@ -135,6 +136,7 @@ export function Layout() {
   const location = useLocation();
   const { canAccess, role } = useRole();
   const { signOut, isDemo } = useAuth();
+  const { billing, loading: planLoading } = usePackage();
 
   const basePath = '/' + location.pathname.split('/')[1];
   if (basePath !== '/' && !canAccess(basePath)) {
@@ -167,7 +169,15 @@ export function Layout() {
     );
   }
 
+  // Trial over and nothing paid: only the Upgrade page is reachable
+  if (!isDemo && !planLoading && billing?.locked && location.pathname !== '/upgrade') {
+    return <Navigate to="/upgrade" replace />;
+  }
+
   const pageTitle = PAGE_TITLES[location.pathname] ?? 'ChurchCare';
+  const showTrialBanner = !isDemo && billing?.onTrial && location.pathname !== '/upgrade';
+  const showRenewBanner = !isDemo && !billing?.onTrial && billing?.daysLeft != null && billing.daysLeft <= 7
+    && location.pathname !== '/upgrade';
 
   return (
     <div className="flex min-h-screen bg-background">
@@ -209,6 +219,22 @@ export function Layout() {
                 Sign up free
               </button>
             </div>
+          </div>
+        )}
+
+        {/* Trial / renewal banner */}
+        {(showTrialBanner || showRenewBanner) && billing && (
+          <div className="flex items-center justify-between gap-3 px-4 py-2.5 bg-navy-900 text-cream text-sm">
+            <div className="flex items-center gap-2">
+              <Clock className="w-4 h-4 shrink-0 text-gold-400" />
+              <span>
+                {showTrialBanner ? 'Free trial' : 'Your plan'}: <strong>{billing.daysLeft} day{billing.daysLeft === 1 ? '' : 's'} left</strong>
+                {showTrialBanner ? '. Choose a plan to keep using ChurchCare.' : '. Renew to avoid losing access.'}
+              </span>
+            </div>
+            <a href="/upgrade" className="shrink-0 px-3 py-1 rounded-full bg-gold-500 text-navy-900 text-xs font-bold hover:bg-gold-400 transition-colors">
+              {showTrialBanner ? 'Choose a plan' : 'Renew'}
+            </a>
           </div>
         )}
 

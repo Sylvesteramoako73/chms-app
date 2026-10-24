@@ -3,12 +3,16 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { usePaystackPayment } from 'react-paystack';
 import { useAuth } from '@/context/AuthContext';
-import { usePackage, PLAN_LABELS, PLAN_PRICES, planPriceDisplay, type Plan } from '@/context/PackageContext';
+import { usePackage, PLAN_LABELS, type Plan } from '@/context/PackageContext';
 import { Button } from '@/components/ui/button';
 import { Check, ArrowLeft, Sparkles, ShieldCheck, Zap, Mail } from 'lucide-react';
 import { cn } from '@/utils';
+import { BILLING_PERIODS, periodPriceGHS, type BillingPeriod } from '@/lib/billing';
 
-const PAYSTACK_KEY = import.meta.env.VITE_PAYSTACK_PUBLIC_KEY as string;
+// Live public key — safe to ship in the browser. An env var overrides it if set.
+const PAYSTACK_KEY =
+  (import.meta.env.VITE_PAYSTACK_PUBLIC_KEY as string | undefined) ||
+  'pk_live_5166af2bfcf7459a95957a7a4d2592c76912ca40';
 
 type PaidPlan = 'starter' | 'growth' | 'pro' | 'custom';
 
@@ -56,10 +60,13 @@ const PLAN_COLOR: Record<PaidPlan, { border: string; selected: string; shadow: s
 interface SuccessScreenProps {
   plan: Plan;
   reference: string;
+  amount: number;
+  period: BillingPeriod;
+  expiresAt: Date | null;
   onDone: () => void;
 }
 
-function SuccessScreen({ plan, reference, onDone }: SuccessScreenProps) {
+function SuccessScreen({ plan, reference, amount, period, expiresAt, onDone }: SuccessScreenProps) {
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.95 }}
@@ -85,8 +92,14 @@ function SuccessScreen({ plan, reference, onDone }: SuccessScreenProps) {
         </div>
         <div className="flex justify-between">
           <span className="text-muted-foreground">Amount</span>
-          <span className="font-semibold">GHS {PLAN_PRICES[plan].toLocaleString()}/month</span>
+          <span className="font-semibold">GHS {amount.toLocaleString()} / {period.label}</span>
         </div>
+        {expiresAt && (
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Active until</span>
+            <span className="font-semibold">{expiresAt.toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' })}</span>
+          </div>
+        )}
         <div className="flex justify-between items-start gap-4">
           <span className="text-muted-foreground shrink-0">Reference</span>
           <span className="font-mono text-xs text-right break-all">{reference}</span>
@@ -108,23 +121,22 @@ function SuccessScreen({ plan, reference, onDone }: SuccessScreenProps) {
 
 interface PlanCardProps {
   plan: PaidPlan;
+  period: BillingPeriod;
   selected: boolean;
   current: boolean;
   onSelect: () => void;
 }
 
-function PlanCard({ plan, selected, current, onSelect }: PlanCardProps) {
+function PlanCard({ plan, period, selected, current, onSelect }: PlanCardProps) {
   const colors = PLAN_COLOR[plan];
   const isCustom = plan === 'custom';
   return (
     <motion.div
       whileHover={{ y: -2 }}
-      onClick={current ? undefined : onSelect}
+      onClick={onSelect}
       className={cn(
         'relative rounded-2xl border-2 p-6 flex flex-col gap-5 cursor-pointer transition-all duration-200',
-        current
-          ? 'border-border/40 bg-muted/10 opacity-50 cursor-not-allowed'
-          : selected
+        selected
             ? `${colors.border} ${colors.selected} ${colors.shadow}`
             : 'border-border/40 bg-muted/10 hover:border-border'
       )}
@@ -136,7 +148,7 @@ function PlanCard({ plan, selected, current, onSelect }: PlanCardProps) {
       )}
       {current && (
         <span className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-wider bg-muted text-muted-foreground border border-border whitespace-nowrap">
-          Current Plan
+          Current Plan · Renew
         </span>
       )}
 
@@ -148,17 +160,21 @@ function PlanCard({ plan, selected, current, onSelect }: PlanCardProps) {
               <span className="text-2xl font-display font-bold">Contact us</span>
             ) : (
               <>
-                <span className="text-3xl font-display font-bold">GHS {PLAN_PRICES[plan].toLocaleString()}</span>
-                <span className="text-sm text-muted-foreground">/month</span>
+                <span className="text-3xl font-display font-bold">GHS {periodPriceGHS(plan, period).toLocaleString()}</span>
+                <span className="text-sm text-muted-foreground"> / {period.label}</span>
+                <span className="block text-xs text-muted-foreground mt-0.5">
+                  GHS {Math.round(periodPriceGHS(plan, period) / period.months)}/month
+                  {period.badge && <span className="font-semibold text-sage-600"> · {period.badge}</span>}
+                </span>
               </>
             )}
           </p>
         </div>
         <div className={cn(
           'w-5 h-5 rounded-full border-2 shrink-0 mt-1 flex items-center justify-center transition-all',
-          selected && !current ? `${colors.border} bg-current` : 'border-border'
+          selected ? `${colors.border} bg-current` : 'border-border'
         )}>
-          {selected && !current && <Check className="w-3 h-3 text-white" />}
+          {selected && <Check className="w-3 h-3 text-white" />}
         </div>
       </div>
 
@@ -177,13 +193,20 @@ function PlanCard({ plan, selected, current, onSelect }: PlanCardProps) {
 export default function Upgrade() {
   const navigate = useNavigate();
   const { profile } = useAuth();
-  const { plan: currentPlan, updatePlan } = usePackage();
-  const [selected, setSelected] = useState<PaidPlan>('starter');
-  const [success, setSuccess] = useState<{ reference: string; plan: Plan } | null>(null);
+  const { plan: activePlan, billing, confirmPayment } = usePackage();
+  // During the trial (or after it ends) there is no paid plan to renew
+  const currentPlan: Plan | null = billing?.onTrial || billing?.expired ? null : activePlan;
+  const [selected, setSelected] = useState<PaidPlan>(
+    currentPlan && currentPlan !== 'free' ? (currentPlan as PaidPlan) : 'starter',
+  );
+  const [period, setPeriod] = useState<BillingPeriod>(BILLING_PERIODS[0]);
+  const [success, setSuccess] = useState<{ reference: string; plan: Plan; amount: number } | null>(null);
   const [paying, setPaying] = useState(false);
+  const [payError, setPayError] = useState('');
 
   const isCustomSelected = selected === 'custom';
-  const amount = isCustomSelected ? 20000 : PLAN_PRICES[selected] * 100;
+  const totalGHS = isCustomSelected ? 0 : periodPriceGHS(selected, period);
+  const amount = totalGHS * 100;
 
   const initializePayment = usePaystackPayment({
     reference: `chms-${Date.now()}`,
@@ -192,8 +215,13 @@ export default function Upgrade() {
     currency: 'GHS',
     publicKey: PAYSTACK_KEY,
     metadata: {
+      plan: selected,
+      months: period.months,
+      church_id: profile?.churchId ?? '',
+      source: 'app',
       custom_fields: [
         { display_name: 'Church Plan', variable_name: 'plan', value: selected },
+        { display_name: 'Billing period', variable_name: 'billing_period', value: period.label },
         { display_name: 'Church ID', variable_name: 'church_id', value: profile?.churchId ?? '' },
       ],
     },
@@ -209,11 +237,17 @@ export default function Upgrade() {
       return;
     }
     setPaying(true);
+    setPayError('');
     initializePayment({
       onSuccess: async (response: { reference: string }) => {
-        await updatePlan(selected as Plan);
-        setSuccess({ reference: response.reference, plan: selected as Plan });
+        // The server checks the payment with Paystack before upgrading the church
+        const { error } = await confirmPayment(response.reference);
         setPaying(false);
+        if (error) {
+          setPayError(`${error} Payment reference: ${response.reference}`);
+          return;
+        }
+        setSuccess({ reference: response.reference, plan: selected as Plan, amount: totalGHS });
       },
       onClose: () => setPaying(false),
     });
@@ -222,7 +256,16 @@ export default function Upgrade() {
   const PAID_PLANS: PaidPlan[] = ['starter', 'growth', 'pro', 'custom'];
 
   if (success) {
-    return <SuccessScreen plan={success.plan} reference={success.reference} onDone={() => navigate('/')} />;
+    return (
+      <SuccessScreen
+        plan={success.plan}
+        reference={success.reference}
+        amount={success.amount}
+        period={period}
+        expiresAt={billing?.planExpiresAt ?? null}
+        onDone={() => navigate('/')}
+      />
+    );
   }
 
   return (
@@ -242,8 +285,35 @@ export default function Upgrade() {
             Upgrade Your Plan
           </h1>
           <p className="text-muted-foreground text-sm">
-            Choose the plan that fits your church. Upgrade instantly — no contracts.
+            {billing?.onTrial
+              ? `You're on the free trial — ${billing.daysLeft} day${billing.daysLeft === 1 ? '' : 's'} left. Pick a plan to keep full access.`
+              : billing?.expired
+                ? 'Your free trial or plan has ended. Choose a plan to continue using ChurchCare — your data is safe and waiting.'
+                : billing?.planExpiresAt
+                  ? `Your ${PLAN_LABELS[activePlan]} plan is active until ${billing.planExpiresAt.toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' })}. Renewing early adds time on top.`
+                  : 'Choose the plan that fits your church. Pay every 3 months, 6 months or once a year.'}
           </p>
+        </div>
+      </div>
+
+      {/* Billing period */}
+      <div className="flex justify-center">
+        <div className="inline-flex p-1 rounded-full border border-border/60 bg-muted/20">
+          {BILLING_PERIODS.map(p => (
+            <button
+              key={p.months}
+              onClick={() => setPeriod(p)}
+              className={cn(
+                'px-4 sm:px-5 py-2 rounded-full text-sm font-semibold transition-colors',
+                period.months === p.months
+                  ? 'bg-navy-900 text-cream dark:bg-gold-500 dark:text-navy-900'
+                  : 'text-muted-foreground hover:text-foreground',
+              )}
+            >
+              {p.label}
+              {p.badge && <span className="ml-1.5 text-xs text-sage-500">{p.badge}</span>}
+            </button>
+          ))}
         </div>
       </div>
 
@@ -253,6 +323,7 @@ export default function Upgrade() {
           <PlanCard
             key={p}
             plan={p}
+            period={period}
             selected={selected === p}
             current={currentPlan === p}
             onSelect={() => setSelected(p)}
@@ -262,7 +333,7 @@ export default function Upgrade() {
 
       {/* CTA button */}
       <AnimatePresence mode="wait">
-        {currentPlan !== selected && (
+        {(
           <motion.div
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
@@ -288,9 +359,10 @@ export default function Upgrade() {
               ) : isCustomSelected ? (
                 <><Mail className="w-4 h-4" /> Contact us for Custom pricing</>
               ) : (
-                <><Sparkles className="w-4 h-4" /> Pay {planPriceDisplay(selected)} — Activate {PLAN_LABELS[selected]}</>
+                <><Sparkles className="w-4 h-4" /> Pay GHS {totalGHS.toLocaleString()} — {currentPlan === selected ? 'Renew' : 'Activate'} {PLAN_LABELS[selected]}</>
               )}
             </Button>
+            {payError && <p className="text-sm text-destructive text-center max-w-md">{payError}</p>}
             {!isCustomSelected && (
               <p className="text-xs text-muted-foreground flex items-center gap-1.5">
                 <ShieldCheck className="w-3.5 h-3.5 text-sage-500" />

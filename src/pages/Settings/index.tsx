@@ -102,7 +102,7 @@ export default function Settings() {
   const [editUserOpen, setEditUserOpen] = useState(false);
   const [editUserLoading, setEditUserLoading] = useState(false);
   const [editUserForm, setEditUserForm] = useState({ id: '', name: '', email: '', phone: '', role: 'Data Entry' as UserRole, branchId: '' });
-  const { plan: currentPlan, features, activatePlan } = usePackage();
+  const { plan: currentPlan, features, billing, activatePlan } = usePackage();
   const [activationCode, setActivationCode] = useState('');
   const [activating, setActivating] = useState(false);
   const [activationError, setActivationError] = useState('');
@@ -709,8 +709,17 @@ export default function Settings() {
                 <CreditCard className="w-5 h-5 text-gold-500" /> Your Plan
               </CardTitle>
               <CardDescription>
-                You are currently on the <strong>{PLAN_LABELS[currentPlan]}</strong> plan.
-                {currentPlan === 'starter' && ' Activate a code below to unlock more features.'}
+                {billing?.onTrial ? (
+                  <>You are on the <strong>free trial</strong> with full access — {billing.daysLeft} day{billing.daysLeft === 1 ? '' : 's'} left.</>
+                ) : (
+                  <>You are currently on the <strong>{PLAN_LABELS[currentPlan]}</strong> plan.</>
+                )}
+                {billing?.planExpiresAt && !billing.onTrial && (
+                  <> Active until <strong>{billing.planExpiresAt.toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' })}</strong>.</>
+                )}{' '}
+                <a href="/upgrade" className="underline underline-offset-2 font-semibold">
+                  {billing?.onTrial ? 'Choose a plan' : 'Renew or change plan'}
+                </a>
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -738,7 +747,7 @@ export default function Settings() {
 
           {/* Plan comparison */}
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-            {(['free', 'starter', 'growth', 'pro', 'custom'] as Plan[]).map(p => {
+            {(['starter', 'growth', 'pro', 'custom'] as Plan[]).map(p => {
               const isCurrent = p === currentPlan;
               const colors = PLAN_COLORS[p];
               return (
