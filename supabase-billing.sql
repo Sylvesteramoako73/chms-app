@@ -1,5 +1,5 @@
 -- =============================================================================
--- ChurchCare — Billing: 1-month free trial, paid periods (3 / 6 / 12 months)
+-- ChurchCare — Billing: 14-day free trial, paid periods (3 / 6 / 12 months)
 --
 -- Run once in Supabase: Dashboard → SQL Editor → New query → paste → Run.
 -- Safe to re-run.
