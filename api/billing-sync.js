@@ -28,7 +28,7 @@ export default async function handler(req, res) {
 
     const { data: settings } = await db
       .from('church_settings')
-      .select('plan, plan_expires_at, trial_ends_at, billing_months')
+      .select('*')
       .eq('church_id', churchId)
       .maybeSingle();
 

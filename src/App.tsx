@@ -30,6 +30,7 @@ import Tasks from './pages/Tasks';
 import WhatsApp from './pages/WhatsApp';
 import Accounting from './pages/Accounting';
 import Upgrade from './pages/Upgrade';
+import Admin from './pages/Admin';
 import { UpgradePrompt } from './components/UpgradePrompt';
 import { usePackage, type PlanFeatures } from './context/PackageContext';
 
@@ -53,6 +54,8 @@ function AppRoutes() {
   useBirthdayWA();
   return (
     <Routes>
+      {/* Platform admin: outside Layout so it is never blocked by a church's own plan */}
+      <Route path="/admin" element={<Admin />} />
       <Route path="/" element={<Layout />}>
         <Route index element={<Dashboard />} />
         <Route path="members" element={<Members />} />
