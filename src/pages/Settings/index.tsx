@@ -17,6 +17,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Save, Upload, Church, Shield, Moon, Cog, Building2, ClipboardList, Pencil, Trash2, MessageCircle, MessageSquare, Users2, Loader2, UserPlus, Eye, EyeOff, CreditCard, Check, KeyRound, Sparkles } from 'lucide-react';
 import { format } from 'date-fns';
 import { WhatsAppConnect } from '@/components/WhatsAppConnect';
+import { supabase } from '@/lib/supabase';
 import { usePackage, PLAN_LABELS, planPriceDisplay, type Plan } from '@/context/PackageContext';
 
 const SERVICE_TYPES_DEFAULT = [
@@ -88,7 +89,7 @@ const PLAN_COLORS: Record<Plan, { border: string; badgeBg: string; check: string
 
 export default function Settings() {
   const { theme, toggleTheme, departments, campuses, auditLogs, addCampus, updateCampus, deleteCampus } = useData();
-  const { profile, allProfiles, updateUserProfile, createUser, deleteUser, refreshProfiles } = useAuth();
+  const { profile, isDemo, allProfiles, updateUserProfile, createUser, deleteUser, refreshProfiles } = useAuth();
   const { actions } = useRole();
   const { toast } = useToast();
   const [addUserOpen, setAddUserOpen] = useState(false);
@@ -166,6 +167,11 @@ export default function Settings() {
     localStorage.setItem('chms_church_phone', phone);
     localStorage.setItem('chms_church_address', address);
     localStorage.setItem('chms_church_founded', founded);
+    // Keep the name on the server too, so the platform admin can see which church this is
+    if (!isDemo && profile?.churchId && churchName.trim()) {
+      supabase.from('church_settings').update({ name: churchName.trim(), updated_at: new Date().toISOString() })
+        .eq('church_id', profile.churchId).then(() => {});
+    }
     toast({ title: 'Profile saved', description: 'Church profile has been updated successfully.' });
   };
 

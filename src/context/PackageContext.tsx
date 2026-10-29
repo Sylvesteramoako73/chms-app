@@ -153,6 +153,8 @@ export interface BillingStatus {
   expired: boolean;              // trial or paid period is over
   locked: boolean;               // no trial and no paid plan — the church must pay to use the app
   daysLeft: number | null;       // days left on the trial or paid period
+  suspended: boolean;            // switched off by the ChurchCare platform admin
+  suspendedReason: string | null;
 }
 
 interface SettingsRow {
@@ -160,6 +162,8 @@ interface SettingsRow {
   plan_expires_at: string | null;
   trial_ends_at: string | null;
   billing_months: number | null;
+  status?: string | null;
+  suspended_reason?: string | null;
 }
 
 const TRIAL_PLAN: Plan = 'pro';
@@ -171,7 +175,11 @@ function resolveBilling(row: SettingsRow | null): { plan: Plan; billing: Billing
   const planExpiresAt = row?.plan_expires_at ? new Date(row.plan_expires_at) : null;
   const trialEndsAt = row?.trial_ends_at ? new Date(row.trial_ends_at) : null;
   const daysUntil = (d: Date) => Math.max(0, Math.ceil((d.getTime() - now) / DAY_MS));
-  const base = { storedPlan, planExpiresAt, trialEndsAt, billingMonths: row?.billing_months ?? null };
+  const base = {
+    storedPlan, planExpiresAt, trialEndsAt, billingMonths: row?.billing_months ?? null,
+    suspended: row?.status === 'suspended',
+    suspendedReason: row?.suspended_reason ?? null,
+  };
 
   if (storedPlan !== 'free' && (!planExpiresAt || planExpiresAt.getTime() > now)) {
     return { plan: storedPlan, billing: { ...base, onTrial: false, expired: false, locked: false, daysLeft: planExpiresAt ? daysUntil(planExpiresAt) : null } };
@@ -237,14 +245,19 @@ export function PackageProvider({ children }: { children: ReactNode }) {
   // Returns 'unavailable' if the billing columns don't exist yet (supabase-billing.sql not run)
   const readSettings = useCallback(async (): Promise<SettingsRow | null | 'unavailable'> => {
     if (!churchId) return null;
-    const select = 'plan, plan_expires_at, trial_ends_at, billing_months';
-    const { data, error } = await supabase.from('church_settings').select(select).eq('church_id', churchId).maybeSingle();
+    let select = 'plan, plan_expires_at, trial_ends_at, billing_months, status, suspended_reason';
+    let { data, error } = await supabase.from('church_settings').select(select).eq('church_id', churchId).maybeSingle();
+    if (error) {
+      // supabase-admin.sql not run yet: read without the status columns
+      select = 'plan, plan_expires_at, trial_ends_at, billing_months';
+      ({ data, error } = await supabase.from('church_settings').select(select).eq('church_id', churchId).maybeSingle());
+    }
     if (error) return 'unavailable';
-    if (data) return data as SettingsRow;
+    if (data) return data as unknown as SettingsRow;
     // No row yet (older accounts) — create one; the database starts the free trial
     await supabase.from('church_settings').insert({ church_id: churchId });
     const { data: created } = await supabase.from('church_settings').select(select).eq('church_id', churchId).maybeSingle();
-    return (created as SettingsRow) ?? null;
+    return (created as unknown as SettingsRow) ?? null;
   }, [churchId]);
 
   const load = useCallback(async () => {

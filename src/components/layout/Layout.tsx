@@ -169,6 +169,27 @@ export function Layout() {
     );
   }
 
+  // Switched off by the ChurchCare team: nothing is reachable
+  if (!isDemo && !planLoading && billing?.suspended) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="text-center space-y-4 max-w-md px-6">
+          <div className="w-14 h-14 bg-red-500/10 rounded-full flex items-center justify-center mx-auto">
+            <ShieldOff className="w-7 h-7 text-red-500" />
+          </div>
+          <h2 className="text-xl font-semibold">This account has been suspended</h2>
+          {billing.suspendedReason && (
+            <p className="text-sm text-muted-foreground">{billing.suspendedReason}</p>
+          )}
+          <p className="text-sm text-muted-foreground">
+            Please contact ChurchCare on 0557001326 or info@churchcare.online to restore access.
+          </p>
+          <Button variant="outline" onClick={() => signOut()}>Sign out</Button>
+        </div>
+      </div>
+    );
+  }
+
   // Trial over and nothing paid: only the Upgrade page is reachable
   if (!isDemo && !planLoading && billing?.locked && location.pathname !== '/upgrade') {
     return <Navigate to="/upgrade" replace />;
