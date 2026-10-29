@@ -50,6 +50,17 @@ function LoadingScreen() {
   );
 }
 
+// admin.churchcare.online opens straight into the platform admin panel
+const IS_ADMIN_HOST = typeof window !== 'undefined' && window.location.hostname.startsWith('admin.');
+
+function AdminRoutes() {
+  return (
+    <Routes>
+      <Route path="*" element={<Admin />} />
+    </Routes>
+  );
+}
+
 function AppRoutes() {
   useBirthdayWA();
   return (
@@ -94,7 +105,7 @@ function App() {
   if (loading) return <LoadingScreen />;
   if (!user && !isDemo) return <AuthPage />;
 
-  return <AppRoutes />;
+  return IS_ADMIN_HOST ? <AdminRoutes /> : <AppRoutes />;
 }
 
 export default App;
