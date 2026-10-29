@@ -89,7 +89,7 @@ async function callAdmin(method: 'GET' | 'POST', body?: object) {
 type DialogKind = 'activate' | 'trial' | 'suspend' | null;
 
 export default function AdminPage() {
-  const { user } = useAuth();
+  const { user, signOut } = useAuth();
   const [churches, setChurches] = useState<AdminChurch[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -184,7 +184,8 @@ export default function AdminPage() {
     return (
       <Centered icon={<ShieldOff className="w-7 h-7 text-red-500" />} title="Admin access only">
         The account {user.email} is not on the platform admin list.
-        <div className="mt-4"><Link to="/" className="text-blue-600 underline">Back to the app</Link></div>
+        <div className="mt-4"><a href="https://app.churchcare.online" className="text-blue-600 underline">Go to the ChurchCare app</a></div>
+        <Button variant="outline" className="mt-3" onClick={() => signOut()}>Sign out</Button>
       </Centered>
     );
   }
@@ -193,7 +194,9 @@ export default function AdminPage() {
     <div className="min-h-screen bg-slate-50 text-slate-900">
       <header className="bg-white border-b border-slate-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex flex-wrap items-center gap-3">
-          <Link to="/" className="text-slate-500 hover:text-slate-900"><ArrowLeft className="w-5 h-5" /></Link>
+          {!window.location.hostname.startsWith('admin.') && (
+            <Link to="/" className="text-slate-500 hover:text-slate-900"><ArrowLeft className="w-5 h-5" /></Link>
+          )}
           <div className="flex-1 min-w-0">
             <h1 className="text-lg font-semibold text-[#0B1F4B]">ChurchCare Admin</h1>
             <p className="text-xs text-slate-500">Every church on the platform, with plan and access controls</p>
@@ -201,6 +204,7 @@ export default function AdminPage() {
           <Button variant="outline" size="sm" onClick={load} disabled={loading}>
             <RefreshCw className={cn('w-4 h-4', loading && 'animate-spin')} /> Refresh
           </Button>
+          <Button variant="ghost" size="sm" onClick={() => signOut()}>Sign out</Button>
         </div>
       </header>
 
