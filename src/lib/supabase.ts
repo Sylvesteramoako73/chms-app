@@ -10,7 +10,7 @@ if (!url || !key) {
         <h2 style="color:#c9a84c;margin-bottom:1rem">Missing environment variables</h2>
         <p style="color:#aaa;max-width:420px">
           <strong>VITE_SUPABASE_URL</strong> and <strong>VITE_SUPABASE_ANON_KEY</strong> are not set.<br/><br/>
-          In Netlify: go to <em>Site settings → Environment variables</em> and add both keys, then trigger a new deploy.
+          In Vercel: go to <em>Project → Settings → Environment Variables</em>, add both keys, then redeploy.
         </p>
       </div>
     </div>`;
