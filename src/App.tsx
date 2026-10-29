@@ -31,6 +31,7 @@ import WhatsApp from './pages/WhatsApp';
 import Accounting from './pages/Accounting';
 import Upgrade from './pages/Upgrade';
 import Admin from './pages/Admin';
+import { AdminLogin, AdminSetPassword } from './pages/Admin/Login';
 import { UpgradePrompt } from './components/UpgradePrompt';
 import { usePackage, type PlanFeatures } from './context/PackageContext';
 
@@ -54,6 +55,11 @@ function LoadingScreen() {
 const IS_ADMIN_HOST = typeof window !== 'undefined' && window.location.hostname.startsWith('admin.');
 
 function AdminRoutes() {
+  // Arrived from a password reset email: set the new password first
+  const [resetting, setResetting] = React.useState(
+    () => new URLSearchParams(window.location.search).get('reset') === '1',
+  );
+  if (resetting) return <AdminSetPassword onDone={() => setResetting(false)} />;
   return (
     <Routes>
       <Route path="*" element={<Admin />} />
@@ -103,9 +109,10 @@ function App() {
   const { user, loading, isDemo } = useAuth();
 
   if (loading) return <LoadingScreen />;
+  if (IS_ADMIN_HOST) return user ? <AdminRoutes /> : <AdminLogin />;
   if (!user && !isDemo) return <AuthPage />;
 
-  return IS_ADMIN_HOST ? <AdminRoutes /> : <AppRoutes />;
+  return <AppRoutes />;
 }
 
 export default App;
