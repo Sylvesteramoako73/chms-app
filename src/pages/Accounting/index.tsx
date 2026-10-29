@@ -53,7 +53,7 @@ const EMPTY_ACCOUNT: Omit<GlAccount, 'id' | 'createdAt'> = {
 };
 
 export default function Accounting() {
-  const { accounts, transactions, budgets, addTransaction, updateTransaction, deleteTransaction, upsertBudget, addAccount, updateAccount, deleteAccount } = useAccounting();
+  const { accounts, transactions, budgets, loading, tablesMissing, addTransaction, updateTransaction, deleteTransaction, upsertBudget, addAccount, updateAccount, deleteAccount } = useAccounting();
   const { giving, campuses } = useData();
   const { actions } = useRole();
   const { profile } = useAuth();
@@ -305,12 +305,22 @@ export default function Accounting() {
         <p className="text-sm text-muted-foreground">Track income, expenses, and budgets across your church.</p>
       </div>
 
-      {accounts.length === 0 && (
+      {tablesMissing && (
         <div className="rounded-xl border border-amber-200 dark:border-amber-800/40 bg-amber-50 dark:bg-amber-900/10 p-4 flex gap-3">
           <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
           <div>
-            <p className="font-medium text-sm text-amber-800 dark:text-amber-300">Database tables not set up yet</p>
-            <p className="text-xs text-amber-700 dark:text-amber-400 mt-0.5">Run the accounting SQL in your Supabase SQL editor to create the required tables and default chart of accounts.</p>
+            <p className="font-medium text-sm text-amber-800 dark:text-amber-300">Accounting is not set up yet</p>
+            <p className="text-xs text-amber-700 dark:text-amber-400 mt-0.5">The accounting tables have not been created for this workspace. Please contact ChurchCare support at info@churchcare.online and we will get it ready for you.</p>
+          </div>
+        </div>
+      )}
+
+      {!loading && !tablesMissing && accounts.length === 0 && (
+        <div className="rounded-xl border border-blue-200 dark:border-blue-800/40 bg-blue-50 dark:bg-blue-900/10 p-4 flex gap-3">
+          <AlertCircle className="w-5 h-5 text-blue-500 shrink-0 mt-0.5" />
+          <div>
+            <p className="font-medium text-sm text-blue-800 dark:text-blue-300">Let us set up your accounts</p>
+            <p className="text-xs text-blue-700 dark:text-blue-400 mt-0.5">You have no accounts yet. Open the Chart of Accounts tab and add the income and expense accounts your church uses, such as Tithes and Offerings or Utilities.</p>
           </div>
         </div>
       )}

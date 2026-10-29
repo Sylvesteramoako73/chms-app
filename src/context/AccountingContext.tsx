@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from './AuthContext';
+import { demoGlAccounts, demoGlTransactions, demoGlBudgets } from '../demo/accounting';
 
 export type AccountType = 'income' | 'expense' | 'asset' | 'liability' | 'equity';
 
@@ -73,6 +74,8 @@ interface AccountingContextValue {
   transactions: GlTransaction[];
   budgets: GlBudget[];
   loading: boolean;
+  /** True when Supabase reports that the accounting tables do not exist yet */
+  tablesMissing: boolean;
   addTransaction: (tx: GlTransaction) => Promise<void>;
   updateTransaction: (tx: GlTransaction) => Promise<void>;
   deleteTransaction: (id: string) => Promise<void>;
@@ -92,9 +95,19 @@ export function AccountingProvider({ children }: { children: ReactNode }) {
   const [transactions, setTransactions] = useState<GlTransaction[]>([]);
   const [budgets, setBudgets] = useState<GlBudget[]>([]);
   const [loading, setLoading] = useState(true);
+  const [tablesMissing, setTablesMissing] = useState(false);
 
   const load = useCallback(async () => {
-    if (isDemo || !churchId) { setLoading(false); return; }
+    if (isDemo) {
+      // The demo church has no Supabase rows, so show sample data instead of an empty ledger
+      setAccounts(demoGlAccounts);
+      setTransactions(demoGlTransactions);
+      setBudgets(demoGlBudgets);
+      setTablesMissing(false);
+      setLoading(false);
+      return;
+    }
+    if (!churchId) { setLoading(false); return; }
     setLoading(true);
     try {
       const [acRes, txRes, bdRes] = await Promise.all([
@@ -102,6 +115,10 @@ export function AccountingProvider({ children }: { children: ReactNode }) {
         supabase.from('gl_transactions').select('*').eq('church_id', churchId).order('date', { ascending: false }),
         supabase.from('gl_budgets').select('*').eq('church_id', churchId),
       ]);
+      // 42P01 is Postgres "relation does not exist"; PGRST205 is PostgREST "table not in schema cache"
+      const missing = [acRes.error, txRes.error, bdRes.error].some(e => e && (e.code === '42P01' || e.code === 'PGRST205'));
+      setTablesMissing(missing);
+      if (acRes.error) console.error('[accounting] gl_accounts:', acRes.error);
       if (acRes.data) setAccounts((acRes.data as Record<string, unknown>[]).map(mapAccount));
       if (txRes.data) setTransactions((txRes.data as Record<string, unknown>[]).map(mapTx));
       if (bdRes.data) setBudgets((bdRes.data as Record<string, unknown>[]).map(mapBudget));
@@ -114,6 +131,7 @@ export function AccountingProvider({ children }: { children: ReactNode }) {
 
   const addTransaction = async (tx: GlTransaction) => {
     setTransactions(prev => [tx, ...prev]);
+    if (isDemo) return; // demo changes stay in memory only
     const { error } = await supabase.from('gl_transactions').insert({
       id: tx.id, date: tx.date, description: tx.description,
       account_id: tx.accountId, amount: tx.amount, type: tx.type,
@@ -125,6 +143,7 @@ export function AccountingProvider({ children }: { children: ReactNode }) {
 
   const updateTransaction = async (tx: GlTransaction) => {
     setTransactions(prev => prev.map(t => t.id === tx.id ? tx : t));
+    if (isDemo) return; // demo changes stay in memory only
     const { error } = await supabase.from('gl_transactions').update({
       date: tx.date, description: tx.description, account_id: tx.accountId,
       amount: tx.amount, type: tx.type, campus_id: tx.campusId, reference: tx.reference,
@@ -134,6 +153,7 @@ export function AccountingProvider({ children }: { children: ReactNode }) {
 
   const deleteTransaction = async (id: string) => {
     setTransactions(prev => prev.filter(t => t.id !== id));
+    if (isDemo) return; // demo changes stay in memory only
     const { error } = await supabase.from('gl_transactions').delete().eq('id', id);
     if (error) { console.error(error); throw error; }
   };
@@ -143,6 +163,7 @@ export function AccountingProvider({ children }: { children: ReactNode }) {
       const existing = prev.findIndex(b => b.id === budget.id);
       return existing >= 0 ? prev.map(b => b.id === budget.id ? budget : b) : [...prev, budget];
     });
+    if (isDemo) return; // demo changes stay in memory only
     const { error } = await supabase.from('gl_budgets').upsert({
       id: budget.id, account_id: budget.accountId, year: budget.year,
       month: budget.month, amount: budget.amount, campus_id: budget.campusId,
@@ -153,6 +174,7 @@ export function AccountingProvider({ children }: { children: ReactNode }) {
 
   const addAccount = async (account: GlAccount) => {
     setAccounts(prev => [...prev, account].sort((a, b) => a.code.localeCompare(b.code)));
+    if (isDemo) return; // demo changes stay in memory only
     const { error } = await supabase.from('gl_accounts').insert({
       id: account.id, code: account.code, name: account.name, type: account.type,
       campus_id: account.campusId, is_giving_sync: account.isGivingSync,
@@ -163,6 +185,7 @@ export function AccountingProvider({ children }: { children: ReactNode }) {
 
   const updateAccount = async (account: GlAccount) => {
     setAccounts(prev => prev.map(a => a.id === account.id ? account : a));
+    if (isDemo) return; // demo changes stay in memory only
     const { error } = await supabase.from('gl_accounts').update({
       code: account.code, name: account.name, type: account.type,
       campus_id: account.campusId, is_giving_sync: account.isGivingSync,
@@ -172,13 +195,14 @@ export function AccountingProvider({ children }: { children: ReactNode }) {
 
   const deleteAccount = async (id: string) => {
     setAccounts(prev => prev.filter(a => a.id !== id));
+    if (isDemo) return; // demo changes stay in memory only
     const { error } = await supabase.from('gl_accounts').delete().eq('id', id);
     if (error) { console.error(error); throw error; }
   };
 
   return (
     <AccountingContext.Provider value={{
-      accounts, transactions, budgets, loading,
+      accounts, transactions, budgets, loading, tablesMissing,
       addTransaction, updateTransaction, deleteTransaction,
       upsertBudget, addAccount, updateAccount, deleteAccount,
       reload: load,
